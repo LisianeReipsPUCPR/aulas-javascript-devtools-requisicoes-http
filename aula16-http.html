@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP por Dentro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: mesa de controle — código à esquerda, "bastidores" (ator → ator) à direita, aba Network embaixo; depois os conceitos em blocos */
+:root{
+  --bg:#edf2f1; --surface:#ffffff; --surface-2:#f4f7f6; --ink:#141c1b; --muted:#566664; --line:#d5dfdd;
+  --accent:#0b7f63; --accent-ink:#ffffff; --accent-soft:#dcf1ea;
+  --c-js:#c48a00; --c-js-soft:#fff2cf; --c-nav:#2d6fd6; --c-nav-soft:#e0ebfc; --c-net:#7a55c8; --c-net-soft:#ece5fa; --c-srv:#0b7f63; --c-srv-soft:#dcf1ea;
+  --warn:#9a5c00; --warn-soft:#fff2d6; --err:#c42b2b; --err-soft:#fde7e7; --ok:#18794a; --ok-soft:#e0f3e8;
+  --t-str:#a33a1a; --t-kw:#8a2bb8; --t-num:#1c55c9; --t-com:#6b7585; --t-fn:#0e6a78;
+  --dt-bg:#ffffff; --dt-bar:#f1f3f4; --dt-line:#cfd4da; --dt-sel:#cfe1fb; --dt-hover:#eef3fb; --dt-exec:#fff6c9; --dt-exec-line:#e2c100;
+  --font-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e1413; --surface:#161e1d; --surface-2:#1c2625; --ink:#e3ebe9; --muted:#93a5a2; --line:#2a3634;
+  --accent:#4fd1a8; --accent-ink:#0e1413; --accent-soft:#143229;
+  --c-js:#f2c14e; --c-js-soft:#3a2f12; --c-nav:#7eaaff; --c-nav-soft:#1c2943; --c-net:#b79cf5; --c-net-soft:#2a2142; --c-srv:#4fd1a8; --c-srv-soft:#143229;
+  --warn:#f2b84f; --warn-soft:#382a11; --err:#ff7f7f; --err-soft:#3a1b1d; --ok:#5fd398; --ok-soft:#14321f;
+  --t-str:#f59e7c; --t-kw:#d6a0ff; --t-num:#8cb6ff; --t-com:#7f8899; --t-fn:#5fd0dc;
+  --dt-bg:#202124; --dt-bar:#2a2b2e; --dt-line:#3d4044; --dt-sel:#26395a; --dt-hover:#2b2f36; --dt-exec:#3b3613; --dt-exec-line:#d9b800;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0e1413; --surface:#161e1d; --surface-2:#1c2625; --ink:#e3ebe9; --muted:#93a5a2; --line:#2a3634;
+  --accent:#4fd1a8; --accent-ink:#0e1413; --accent-soft:#143229;
+  --c-js:#f2c14e; --c-js-soft:#3a2f12; --c-nav:#7eaaff; --c-nav-soft:#1c2943; --c-net:#b79cf5; --c-net-soft:#2a2142; --c-srv:#4fd1a8; --c-srv-soft:#143229;
+  --warn:#f2b84f; --warn-soft:#382a11; --err:#ff7f7f; --err-soft:#3a1b1d; --ok:#5fd398; --ok-soft:#14321f;
+  --t-str:#f59e7c; --t-kw:#d6a0ff; --t-num:#8cb6ff; --t-com:#7f8899; --t-fn:#5fd0dc;
+  --dt-bg:#202124; --dt-bar:#2a2b2e; --dt-line:#3d4044; --dt-sel:#26395a; --dt-hover:#2b2f36; --dt-exec:#3b3613; --dt-exec-line:#d9b800;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:0 64px}
+.wrap{max-width:1320px; margin:0 auto}
+h1,h2,h3{font-family:var(--font-display); text-wrap:balance; line-height:1.15; margin:0}
+code,kbd,.mono{font-family:var(--font-mono)}
+code{font-size:.88em}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
+.muted{color:var(--muted)}
+
+.top{display:flex; flex-wrap:wrap; gap:12px 32px; align-items:flex-end; justify-content:space-between; padding-block:28px 20px}
+.eyebrow{font:600 12px/1 var(--font-body); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.top h1{font-size:clamp(30px, 4.4vw, 52px); font-weight:800; letter-spacing:-.02em; margin-top:8px}
+.top h1 em{font-style:normal; color:var(--accent)}
+.top p{margin:8px 0 0; color:var(--muted); max-width:64ch}
+.trail{display:flex; flex-wrap:wrap; gap:6px; list-style:none; margin:0; padding:0}
+.trail li{font-size:12.5px; padding:5px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted)}
+.trail li b{color:var(--ink)}
+
+/* ---------- simulador ---------- */
+.scen{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px}
+.scen button{border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:6px 12px; cursor:pointer; font-size:13.5px; display:flex; gap:7px; align-items:center}
+.scen button:hover{border-color:var(--accent)}
+.scen button[aria-pressed="true"]{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+.mtag{font:700 10.5px var(--font-mono); letter-spacing:.04em; padding:1px 6px; border-radius:4px; background:var(--surface-2); color:var(--ink); border:1px solid var(--line)}
+.scen button[aria-pressed="true"] .mtag{background:var(--bg); color:var(--ink)}
+.sim{display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr); gap:14px}
+@media (max-width:980px){ .sim{grid-template-columns:minmax(0,1fr)} }
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); min-width:0; overflow:hidden; display:flex; flex-direction:column}
+.ph{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--surface-2); font-size:12.5px}
+.ph b{font-family:var(--font-mono); font-weight:500}
+.code{font:13px/1.75 var(--font-mono); padding:8px 0; overflow-x:auto; flex:1}
+.cl{display:flex; white-space:pre; min-width:max-content; transition:background .2s}
+.cl .g{flex:none; width:38px; text-align:right; padding-right:12px; color:var(--muted); user-select:none}
+.cl .c{padding-right:20px}
+.cl.on{background:var(--dt-exec); box-shadow:inset 3px 0 0 var(--dt-exec-line)}
+.cl.dim{opacity:.45}
+.t-str{color:var(--t-str)} .t-kw{color:var(--t-kw)} .t-num{color:var(--t-num)} .t-com{color:var(--t-com); font-style:italic} .t-fn{color:var(--t-fn)}
+.goal{padding:10px 12px; border-top:1px solid var(--line); font-size:13.5px; color:var(--muted)}
+.goal b{color:var(--ink)}
+
+/* bastidores */
+.stage{padding:14px; display:flex; flex-direction:column; gap:12px; flex:1}
+.actors{position:relative; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px}
+@media (max-width:560px){ .actors{grid-template-columns:repeat(2, minmax(0,1fr))} }
+.actor{border:1.5px solid var(--line); border-radius:10px; padding:10px; text-align:center; background:var(--surface); transition:transform .25s, border-color .25s, background .25s; min-width:0}
+.actor svg{width:28px; height:28px; display:block; margin:0 auto 4px; color:var(--k)}
+.actor b{display:block; font:700 13.5px var(--font-display)}
+.actor small{display:block; font-size:11.5px; color:var(--muted); line-height:1.3}
+.actor.on{border-color:var(--k); background:var(--ks); transform:translateY(-2px)}
+.actor[data-a="js"]{--k:var(--c-js); --ks:var(--c-js-soft)} .actor[data-a="nav"]{--k:var(--c-nav); --ks:var(--c-nav-soft)}
+.actor[data-a="net"]{--k:var(--c-net); --ks:var(--c-net-soft)} .actor[data-a="srv"]{--k:var(--c-srv); --ks:var(--c-srv-soft)}
+.packet{position:absolute; left:0; top:0; width:16px; height:16px; border-radius:4px; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); pointer-events:none; opacity:0; z-index:2}
+.wire{height:4px; border-radius:2px; background:repeating-linear-gradient(90deg, var(--line) 0 8px, transparent 8px 14px)}
+.caption{border-radius:10px; background:var(--surface-2); padding:12px 14px; min-height:128px}
+.caption .who{font:700 11px var(--font-body); letter-spacing:.1em; text-transform:uppercase}
+.caption h3{font-size:19px; margin:4px 0 6px}
+.caption p{margin:0; font-size:14.5px}
+.caption code{background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:0 4px}
+.promise{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px}
+.pstate{font:600 12px var(--font-mono); padding:3px 10px; border-radius:999px; border:1px solid var(--line); color:var(--muted)}
+.pstate.on.pending{background:var(--warn-soft); color:var(--warn); border-color:currentColor}
+.pstate.on.fulfilled{background:var(--ok-soft); color:var(--ok); border-color:currentColor}
+.pstate.on.rejected{background:var(--err-soft); color:var(--err); border-color:currentColor}
+.raw{font:12.5px/1.6 var(--font-mono); background:var(--dt-bg); border:1px solid var(--dt-line); border-radius:8px; padding:10px 12px; overflow-x:auto; white-space:pre; margin:0; max-height:220px}
+.raw .sl{font-weight:700} .raw .hn{color:var(--t-kw)} .raw .bd{color:var(--t-str)}
+.raw .m{color:var(--c-nav); font-weight:700} .raw .s2{color:var(--ok); font-weight:700} .raw .s4{color:var(--err); font-weight:700}
+.rawlabel{font:600 11px var(--font-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); display:flex; justify-content:space-between; gap:8px}
+.ctrls{display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 14px; border-top:1px solid var(--line)}
+.btn{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13.5px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+.btn:disabled{opacity:.4; cursor:not-allowed}
+.prog{flex:1; min-width:120px; display:flex; gap:3px}
+.prog i{flex:1; height:6px; border-radius:3px; background:var(--line); cursor:pointer}
+.prog i.done{background:var(--accent)}
+.prog i.cur{background:var(--ink)}
+.stepn{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+
+/* devtools network */
+.dt{margin-top:14px; border:1px solid var(--dt-line); border-radius:var(--r); overflow:hidden; background:var(--dt-bg); font-size:12.5px}
+.dt-head{display:flex; align-items:center; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); overflow-x:auto}
+.dt-tab{border:0; background:transparent; padding:0 12px; height:32px; color:var(--muted); border-bottom:2px solid transparent; white-space:nowrap; cursor:default}
+.dt-tab.cur{color:var(--ink); border-bottom-color:var(--c-nav); background:var(--dt-bg)}
+.dt-body{display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr); min-height:300px}
+@media (max-width:860px){ .dt-body{grid-template-columns:minmax(0,1fr)} }
+.netlist{border-right:1px solid var(--dt-line); min-width:0; display:flex; flex-direction:column}
+@media (max-width:860px){ .netlist{border-right:0; border-bottom:1px solid var(--dt-line)} }
+.netbar{display:flex; flex-wrap:wrap; gap:4px; padding:4px 8px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); align-items:center}
+.chip{border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:999px; padding:1px 9px; font-size:11.5px}
+.chip.on{background:var(--dt-sel); border-color:var(--c-nav)}
+.tbl{overflow:auto; flex:1}
+table.grid{border-collapse:collapse; width:100%; font-size:12px; font-variant-numeric:tabular-nums}
+table.grid th{position:sticky; top:0; background:var(--dt-bar); text-align:left; font-weight:600; padding:4px 8px; border-bottom:1px solid var(--dt-line); border-right:1px solid var(--dt-line); white-space:nowrap}
+table.grid td{padding:5px 8px; border-bottom:1px solid var(--dt-line); border-right:1px solid var(--dt-line); white-space:nowrap}
+table.grid tbody tr{cursor:pointer}
+table.grid tbody tr:hover{background:var(--dt-hover)}
+table.grid tbody tr.sel{background:var(--dt-sel)}
+table.grid tr.fail td{color:var(--err)}
+table.grid tr.pend td{color:var(--muted); font-style:italic}
+.empty{padding:20px; color:var(--muted); text-align:center}
+.det{min-width:0; display:flex; flex-direction:column}
+.det-tabs{display:flex; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); overflow-x:auto}
+.det-tabs button{border:0; background:transparent; padding:6px 12px; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; white-space:nowrap; font-size:12.5px}
+.det-tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--c-nav)}
+.det-body{padding:8px 12px 12px; overflow:auto; max-height:340px; font:12px/1.65 var(--font-mono)}
+.hsec{margin-top:6px}
+.hsec > b{display:block; font:600 12px var(--font-body); margin:6px 0 2px}
+.hrow{display:grid; grid-template-columns:minmax(120px, 38%) 1fr; gap:8px; padding:1px 0}
+.hrow span:first-child{color:var(--muted)}
+.hrow span:last-child{word-break:break-all}
+.hrow.key span:first-child{color:var(--ink); font-weight:700}
+.dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:0}
+.tree{list-style:none; margin:0; padding-left:14px}
+.tree > li > details > summary{cursor:pointer}
+.k{color:var(--t-kw)} .vs{color:var(--t-str)} .vn{color:var(--t-num)}
+.tbar{display:grid; grid-template-columns:150px 1fr 70px; gap:8px; align-items:center; padding:2px 0}
+@media (max-width:480px){ .tbar{grid-template-columns:110px 1fr 56px} }
+.tbar .track{position:relative; height:12px; background:var(--dt-bar); border-radius:2px}
+.tbar .track i{position:absolute; top:0; height:12px; border-radius:2px}
+.tbar span:last-child{text-align:right}
+.hint{font-family:var(--font-body); font-size:12.5px; color:var(--muted); margin:8px 0 0; padding:8px 10px; background:var(--accent-soft); border-radius:6px}
+.hint b{color:var(--ink)}
+.drawer{border-top:1px solid var(--dt-line)}
+.drawer-h{display:flex; align-items:center; gap:8px; padding:4px 10px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); font-weight:600}
+.con{font:12.5px/1.6 var(--font-mono); max-height:180px; overflow:auto; min-height:44px}
+.ln{display:flex; gap:8px; padding:3px 10px; border-bottom:1px solid var(--dt-line); white-space:pre-wrap; word-break:break-word}
+.ln .ic{flex:none; width:14px; text-align:center}
+.ln .bd{flex:1; min-width:0}
+.ln .lk{flex:none; color:var(--muted); text-decoration:underline}
+.ln.warn{background:var(--warn-soft); color:var(--warn)} .ln.error{background:var(--err-soft); color:var(--err)}
+
+/* ---------- seções ---------- */
+section.block{margin-top:56px}
+.sh{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 16px; margin-bottom:18px}
+.sh h2{font-size:clamp(24px, 3vw, 34px); font-weight:800; letter-spacing:-.015em}
+.sh p{margin:0; color:var(--muted); max-width:66ch}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; min-width:0}
+
+.analogy{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; align-items:stretch}
+@media (max-width:760px){ .analogy{grid-template-columns:repeat(2, minmax(0,1fr))} }
+.analogy div{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px; position:relative}
+.analogy b{display:block; font:800 18px var(--font-display)}
+.analogy span{display:block; font-size:13.5px; color:var(--muted)}
+.analogy em{display:block; font-style:normal; font:600 12px var(--font-mono); color:var(--accent); margin-top:6px}
+
+.url{font:clamp(14px, 2vw, 20px)/1.8 var(--font-mono); background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 18px; overflow-x:auto; white-space:nowrap}
+.url span{cursor:pointer; padding:3px 1px; border-radius:4px; border-bottom:3px solid var(--uc)}
+.url span.on{background:var(--surface-2)}
+.url .faded{opacity:.5}
+.urlx{margin-top:10px; min-height:70px}
+.urlx b{font-family:var(--font-display); font-size:17px}
+
+.msgs{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px}
+@media (max-width:860px){ .msgs{grid-template-columns:minmax(0,1fr)} }
+.msg pre{margin:0; font:13px/1.7 var(--font-mono); background:var(--dt-bg); border:1px solid var(--dt-line); border-radius:8px; padding:12px; overflow-x:auto}
+.msg pre span{cursor:pointer; border-radius:3px; padding:1px 0}
+.msg pre span:hover, .msg pre span.on{background:var(--accent-soft); box-shadow:0 0 0 2px var(--accent-soft)}
+.msg h3{font-size:18px; margin-bottom:8px}
+.msgx{margin-top:12px}
+
+table.tb{width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.tbw{overflow-x:auto}
+table.tb th, table.tb td{padding:11px 14px; text-align:left; border-bottom:1px solid var(--line); font-size:14px; vertical-align:top}
+table.tb th{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:600}
+table.tb tr:last-child td{border-bottom:0}
+.meth{font:700 12.5px var(--font-mono); padding:2px 8px; border-radius:5px; display:inline-block; min-width:62px; text-align:center}
+.m-get{background:var(--c-nav-soft); color:var(--c-nav)} .m-post{background:var(--ok-soft); color:var(--ok)} .m-put{background:var(--warn-soft); color:var(--warn)} .m-patch{background:var(--c-net-soft); color:var(--c-net)} .m-delete{background:var(--err-soft); color:var(--err)}
+.crud{font:800 18px var(--font-display)}
+
+.fams{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px}
+@media (max-width:900px){ .fams{grid-template-columns:repeat(2, minmax(0,1fr))} }
+@media (max-width:480px){ .fams{grid-template-columns:minmax(0,1fr)} }
+.fam{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px; display:flex; flex-direction:column; gap:8px; border-top:4px solid var(--fc)}
+.fam h3{font-size:24px; font-family:var(--font-mono); color:var(--fc)}
+.fam p{margin:0; font-size:13.5px; color:var(--muted)}
+.codes{display:flex; flex-wrap:wrap; gap:6px}
+.codes button{border:1px solid var(--line); background:var(--surface-2); border-radius:6px; padding:3px 9px; cursor:pointer; font:600 13px var(--font-mono)}
+.codes button.on{border-color:var(--fc); background:var(--surface); box-shadow:0 0 0 2px var(--fc) inset}
+.codex{margin-top:12px}
+.codex h3{font-size:20px}
+.okpill{font:600 12px var(--font-mono); border-radius:999px; padding:2px 10px; display:inline-block; margin-top:6px}
+
+.two{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px}
+@media (max-width:860px){ .two{grid-template-columns:minmax(0,1fr)} }
+textarea{width:100%; min-height:170px; font:13px/1.6 var(--font-mono); background:var(--dt-bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical}
+.row{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.out{margin-top:10px; font:13px/1.6 var(--font-mono); background:var(--surface-2); border-radius:8px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; min-height:60px}
+.out.err{background:var(--err-soft); color:var(--err)}
+.tagline{font:600 12px var(--font-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
+.card h3{font-size:19px; margin-bottom:6px}
+.card p{margin:0 0 8px; font-size:14.5px}
+.store{margin-top:10px}
+
+.checks{display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; list-style:none; margin:0; padding:0}
+.checks li{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; font-size:14px; display:flex; gap:10px}
+.checks li::before{content:""; flex:none; width:16px; height:16px; margin-top:2px; border-radius:4px; border:2px solid var(--accent)}
+.checks b{display:block; font-family:var(--font-display); font-size:15.5px}
+.checks span{color:var(--muted)}
+
+.cuidado{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px}
+@media (max-width:980px){ .cuidado{grid-template-columns:repeat(2, minmax(0,1fr))} }
+@media (max-width:520px){ .cuidado{grid-template-columns:minmax(0,1fr)} }
+.cuidado div{border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; background:var(--surface); display:flex; flex-direction:column; gap:6px}
+.cuidado b{font-family:var(--font-display); font-size:17px}
+.cuidado span{font-size:14px; color:var(--muted); flex:1}
+.cuidado button{align-self:flex-start}
+
+.prac{display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px}
+.ex{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; display:flex; flex-direction:column; gap:8px}
+.ex h3{font-size:18px}
+.ex p{margin:0; font-size:14px; color:var(--muted)}
+.ex details{border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:14px}
+.ex details summary{cursor:pointer; font-weight:600}
+.ex pre{margin:6px 0 0; font:12.5px/1.6 var(--font-mono); background:var(--surface-2); border-radius:6px; padding:8px 10px; overflow-x:auto}
+.ex .where{font:600 12px var(--font-body); color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:2px 10px; align-self:flex-start}
+.foot{margin-top:48px; color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:8px 24px}
+.foot a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">JavaScript · Aula 16 · Requisições HTTP · Profa. Lisiane Reips</div>
+      <h1>Hoje o site vai <em>conversar com a internet</em></h1>
+      <p>Escolha um exemplo e avance passo a passo. À esquerda, a linha de código que está rodando; à direita, o que acontece por trás dos panos; embaixo, o que a aba Network do DevTools registra.</p>
+    </div>
+    <ul class="trail" aria-label="Trilha da aula">
+      <li><b>1</b> HTTP e API</li><li><b>2</b> Métodos e status</li><li><b>3</b> JSON</li><li><b>4</b> fetch e async/await</li><li><b>5</b> CRUD na prática</li><li><b>6</b> Praticar</li>
+    </ul>
+  </header>
+
+  <div class="scen" id="scen" role="group" aria-label="Exemplos"></div>
+
+  <div class="sim">
+    <div class="panel">
+      <div class="ph"><b id="fname">async.js</b><span class="muted">a linha amarela é a que está rodando</span></div>
+      <div class="code" id="code"></div>
+      <div class="goal" id="goal"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span><b style="font-family:var(--font-body);font-weight:700">Por trás dos panos</b></span><span class="muted">simulação · os tempos são de exemplo</span></div>
+      <div class="stage">
+        <div class="actors" id="actors">
+          <div class="actor" data-a="js"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg><b>Seu código</b><small>JavaScript</small></div>
+          <div class="actor" data-a="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M2.5 8.5h19"/><circle cx="5.5" cy="6.3" r=".6" fill="currentColor"/></svg><b>Navegador</b><small>cliente</small></div>
+          <div class="actor" data-a="net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><b>Internet</b><small>DNS · TCP · TLS</small></div>
+          <div class="actor" data-a="srv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01"/></svg><b>Servidor</b><small>a API</small></div>
+          <div class="packet" id="packet"></div>
+        </div>
+        <div class="promise" id="promise"><span class="muted">Promise do fetch:</span><span class="pstate pending">pending</span><span class="pstate fulfilled">fulfilled</span><span class="pstate rejected">rejected</span></div>
+        <div class="caption" id="caption" aria-live="polite"></div>
+        <div id="rawBox" hidden>
+          <div class="rawlabel"><span id="rawTitle">Mensagem HTTP</span><span>formato texto do HTTP/1.1</span></div>
+          <pre class="raw" id="raw"></pre>
+        </div>
+      </div>
+      <div class="ctrls">
+        <button class="btn" id="prev">← Voltar</button>
+        <button class="btn primary" id="next">Próximo passo →</button>
+        <button class="btn" id="play">▶ Rodar tudo</button>
+        <div class="prog" id="prog"></div>
+        <span class="stepn" id="stepn"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dt" aria-label="DevTools simulado">
+    <div class="dt-head"><span class="dt-tab">Elements</span><span class="dt-tab">Console</span><span class="dt-tab">Sources</span><span class="dt-tab cur">Network</span><span class="dt-tab">Application</span></div>
+    <div class="dt-body">
+      <div class="netlist">
+        <div class="netbar"><span class="chip">All</span><span class="chip on">Fetch/XHR</span><span class="chip">Doc</span><span class="chip">CSS</span><span class="chip">JS</span><span class="chip">Img</span></div>
+        <div class="tbl"><table class="grid"><thead><tr><th>Name</th><th>Method</th><th>Status</th><th>Type</th><th>Initiator</th><th>Size</th><th>Time</th></tr></thead><tbody id="netRows"></tbody></table><div class="empty" id="netEmpty">Nenhuma requisição ainda. Avance os passos.</div></div>
+      </div>
+      <div class="det">
+        <div class="det-tabs" role="tablist" id="detTabs">
+          <button role="tab" data-t="headers" aria-selected="true">Headers</button>
+          <button role="tab" data-t="payload" aria-selected="false">Payload</button>
+          <button role="tab" data-t="preview" aria-selected="false">Preview</button>
+          <button role="tab" data-t="response" aria-selected="false">Response</button>
+          <button role="tab" data-t="timing" aria-selected="false">Timing</button>
+        </div>
+        <div class="det-body" id="detBody"></div>
+      </div>
+    </div>
+    <div class="drawer">
+      <div class="drawer-h">Console</div>
+      <div class="con" id="con"></div>
+    </div>
+  </div>
+
+  <!-- ===================== CONCEITOS ===================== -->
+  <section class="block">
+    <div class="sh"><h2>O que é uma API?</h2><p>API é a forma de sistemas conversarem. HTTP é o protocolo dessa conversa: sempre um pedido seguido de uma resposta.</p></div>
+    <div class="analogy">
+      <div><b>Você</b><span>faz o pedido</span><em>requisição</em></div>
+      <div><b>Garçom</b><span>leva o pedido</span><em>a API</em></div>
+      <div><b>Cozinha</b><span>prepara os dados</span><em>o servidor</em></div>
+      <div><b>Prato</b><span>volta para você</span><em>resposta</em></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Anatomia de uma URL</h2><p>A URL é o endereço do recurso. Clique em cada pedaço.</p></div>
+    <div class="url" id="url">
+      <span data-u="0" style="--uc:var(--c-net)">https://</span><span data-u="1" style="--uc:var(--c-nav)">jsonplaceholder.typicode.com</span><span data-u="2" class="faded" style="--uc:var(--line)">:443</span><span data-u="3" style="--uc:var(--c-srv)">/users</span><span data-u="4" style="--uc:var(--c-js)">/1</span><span data-u="5" style="--uc:var(--warn)">?_limit=5</span>
+    </div>
+    <div class="card urlx" id="urlx"></div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Estrutura de uma mensagem HTTP</h2><p>URL, método, headers e body. Clique em qualquer linha das mensagens.</p></div>
+    <div class="msgs">
+      <div class="card msg"><h3>Requisição <span class="muted" style="font:500 14px var(--font-body)">(o navegador envia)</span></h3>
+<pre id="mreq"><span data-m="start"><b class="mono" style="color:var(--ok)">POST</b> /users HTTP/1.1</span>
+<span data-m="host">Host: jsonplaceholder.typicode.com</span>
+<span data-m="ctype">Content-Type: application/json</span>
+<span data-m="accept">Accept: */*</span>
+<span data-m="origin">Origin: http://127.0.0.1:5500</span>
+<span data-m="blank"> </span>
+<span data-m="body">{"name":"Lisiane","email":"lisiane@email.com"}</span></pre></div>
+      <div class="card msg"><h3>Resposta <span class="muted" style="font:500 14px var(--font-body)">(o servidor devolve)</span></h3>
+<pre id="mres"><span data-m="status">HTTP/1.1 <b class="mono" style="color:var(--ok)">201 Created</b></span>
+<span data-m="rctype">Content-Type: application/json; charset=utf-8</span>
+<span data-m="acao">Access-Control-Allow-Origin: *</span>
+<span data-m="location">Location: https://jsonplaceholder.typicode.com/users/11</span>
+<span data-m="blank"> </span>
+<span data-m="rbody">{"name":"Lisiane","email":"lisiane@email.com","id":11}</span></pre></div>
+    </div>
+    <div class="card msgx" id="msgx"></div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Métodos HTTP e o CRUD</h2><p>O método é o verbo do pedido: diz o que queremos fazer. Cada letra do CRUD tem um método parceiro.</p></div>
+    <div class="tbw"><table class="tb">
+      <thead><tr><th>Método</th><th>O que faz</th><th>No restaurante</th><th>CRUD</th><th>Tem body?</th><th>Exemplo com fetch</th></tr></thead>
+      <tbody>
+        <tr><td><span class="meth m-get">GET</span></td><td>Buscar dados</td><td>ler o cardápio</td><td><span class="crud">R</span> Read</td><td>Não</td><td><code>fetch(API)</code></td></tr>
+        <tr><td><span class="meth m-post">POST</span></td><td>Criar um recurso novo</td><td>fazer um pedido</td><td><span class="crud">C</span> Create</td><td>Sim</td><td><code>fetch(API, { method: "POST", … })</code></td></tr>
+        <tr><td><span class="meth m-put">PUT</span></td><td>Substituir um recurso inteiro</td><td>trocar o prato todo</td><td><span class="crud">U</span> Update</td><td>Sim</td><td><code>fetch(`${API}/1`, { method: "PUT", … })</code></td></tr>
+        <tr><td><span class="meth m-patch">PATCH</span></td><td>Atualizar só uma parte</td><td>só mais sal</td><td><span class="crud">U</span> Update</td><td>Sim</td><td><code>fetch(`${API}/1`, { method: "PATCH", … })</code></td></tr>
+        <tr><td><span class="meth m-delete">DELETE</span></td><td>Remover um recurso</td><td>cancelar o pedido</td><td><span class="crud">D</span> Delete</td><td>Não</td><td><code>fetch(`${API}/1`, { method: "DELETE" })</code></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted" style="font-size:14px;margin-top:10px">Repare: em PUT, PATCH e DELETE a URL termina com o id do recurso (<code>/users/1</code>). Sem <code>method</code>, o fetch faz GET.</p>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Códigos de status</h2><p>Toda resposta vem com um número que conta como foi. Clique num código.</p></div>
+    <div class="fams" id="fams"></div>
+    <div class="card codex" id="codex"></div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>JSON e a Promise</h2><p>As APIs respondem em JSON, um texto com formato de objeto JS. E o fetch responde com uma Promise, a senha do lanche.</p></div>
+    <div class="two">
+      <div class="card">
+        <p class="tagline">Laboratório de JSON</p>
+        <h3>Texto ⇄ objeto</h3>
+        <textarea id="jsonIn" spellcheck="false" aria-label="Texto JSON">{
+  "id": 1,
+  "nome": "Ana",
+  "ativo": true,
+  "cursos": ["HTML", "JS"]
+}</textarea>
+        <div class="row">
+          <button class="btn primary" id="jParse">JSON.parse(texto)</button>
+          <button class="btn" id="jStr">JSON.stringify(objeto)</button>
+          <button class="btn" id="jBad">Carregar JSON com erro</button>
+        </div>
+        <div class="out" id="jOut">Clique num botão.</div>
+        <p class="muted" style="font-size:13.5px;margin:8px 0 0">No JSON, as chaves sempre usam aspas duplas. Aspas simples, vírgula sobrando no fim ou comentários quebram o <code>JSON.parse</code>.</p>
+      </div>
+      <div class="card">
+        <p class="tagline">É como uma senha</p>
+        <h3>fetch devolve uma Promise</h3>
+        <p>Você pede o lanche e recebe uma senha (a Promise). Enquanto espera, faz outras coisas. Quando chamam o número, o lanche chega.</p>
+        <div class="tbw" style="margin-top:8px"><table class="tb">
+          <thead><tr><th>Estado</th><th>Significa</th><th>Quem roda</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pstate on pending">pending</span></td><td>esperando a resposta</td><td>ninguém ainda</td></tr>
+            <tr><td><span class="pstate on fulfilled">fulfilled</span></td><td>a resposta chegou, <b>mesmo que seja 404 ou 500</b></td><td><code>.then()</code> ou a linha depois do <code>await</code></td></tr>
+            <tr><td><span class="pstate on rejected">rejected</span></td><td>falha de rede, CORS ou erro lançado</td><td><code>.catch()</code> ou o bloco <code>catch</code></td></tr>
+          </tbody>
+        </table></div>
+        <p style="margin-top:10px;font-size:14px"><b>then</b> e <b>async/await</b> fazem a mesma coisa. Com <code>await</code>, o código fica de cima para baixo e o erro vai para o <code>try/catch</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Local Storage não é HTTP</h2><p>É uma gavetinha dentro do navegador: guarda pares chave → valor, só em texto, e os dados continuam lá depois de fechar a aba. Nada vai para a internet.</p></div>
+    <div class="two">
+      <div class="card">
+        <p class="tagline">Teste de verdade, nesta página</p>
+        <h3>A gavetinha</h3>
+        <div class="row" style="margin-top:4px">
+          <button class="btn primary" id="lsSave">Salvar usuários</button>
+          <button class="btn" id="lsRead">Ler</button>
+          <button class="btn" id="lsDel">Apagar</button>
+        </div>
+        <div class="out" id="lsOut">A chave <code>usuarios</code> está vazia.</div>
+        <p class="muted" style="font-size:13.5px;margin:8px 0 0">Depois de salvar, abra o DevTools nesta página: <b>Application › Local Storage</b>. A chave estará lá, com o valor em texto.</p>
+      </div>
+      <div class="card">
+        <p class="tagline">storage.js</p>
+        <div class="code" id="lsCode" style="padding:0"></div>
+        <p class="muted" style="font-size:13.5px;margin:8px 0 0">Na prática, usamos para guardar os usuários localmente, já que a API de teste responde 201 mas não salva de verdade.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>O que observar na aba Network</h2><p>O checklist para a entrega de hoje. Abra o DevTools <b>antes</b> de fazer a requisição e filtre por Fetch/XHR.</p></div>
+    <ul class="checks">
+      <li><div><b>Status</b><span>2xx deu certo, 4xx erro seu, 5xx erro do servidor. Vermelho pede atenção.</span></div></li>
+      <li><div><b>Method</b><span>É o que você pediu? Um POST que aparece como GET esqueceu o <code>method</code>.</span></div></li>
+      <li><div><b>Initiator</b><span>Qual arquivo e linha fez a requisição. Clique e vá direto para o código.</span></div></li>
+      <li><div><b>Headers › Request URL</b><span>A URL saiu certa? Falta de <code>/</code>, id ou <code>?</code> aparece aqui.</span></div></li>
+      <li><div><b>Payload</b><span>O body que foi enviado. Se aparece <code>[object Object]</code>, faltou o <code>JSON.stringify</code>.</span></div></li>
+      <li><div><b>Preview e Response</b><span>O que o servidor devolveu, organizado (Preview) ou cru (Response).</span></div></li>
+      <li><div><b>Time e Timing</b><span>Quanto demorou e onde: esperando o servidor (Waiting) ou baixando.</span></div></li>
+      <li><div><b>OPTIONS antes do POST</b><span>É o preflight de CORS, normal com JSON. Não é requisição repetida.</span></div></li>
+    </ul>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Cuidado!</h2><p>Os quatro tropeços mais comuns. Cada botão abre o exemplo no simulador.</p></div>
+    <div class="cuidado">
+      <div><b>Esquecer o await</b><span>Aparece <code>Promise {&lt;pending&gt;}</code> no lugar dos dados.</span><button class="btn" data-go="noawait">Ver no simulador ↑</button></div>
+      <div><b>Esquecer o .json()</b><span>A resposta chega, mas ainda não é um objeto JS: é um <code>Response</code>.</span><button class="btn" data-go="async" data-step="7">Ver no simulador ↑</button></div>
+      <div><b>Body sem stringify</b><span>O body precisa ser texto: <code>JSON.stringify(objeto)</code>.</span><button class="btn" data-go="post" data-step="1">Ver no simulador ↑</button></div>
+      <div><b>Erro de CORS</b><span>O servidor não permite o seu site. Não é bug do seu JS!</span><button class="btn" data-go="cors">Ver no simulador ↑</button></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Vamos praticar?</h2><p>Entregue o print do resultado e o print da aba Network mostrando a requisição e o status.</p></div>
+    <div class="prac">
+      <div class="ex"><span class="where">Console, na aba do jsonplaceholder</span><h3>1) Mural de posts</h3><p>GET em <code>/posts</code> e mostre só os títulos dos 5 primeiros (use <code>slice</code> ou <code>filter</code>).</p>
+        <details><summary>Dica</summary>Depois do <code>await resposta.json()</code> você tem um array. <code>posts.slice(0, 5)</code> pega os 5 primeiros; depois um <code>forEach</code> mostra <code>post.title</code>.</details></div>
+      <div class="ex"><span class="where">index.html ou CodePen</span><h3>2) Cachorro da vez</h3><p>Botão "Novo cachorro" troca a imagem com a API dog.ceo. Enquanto espera, mostre "Carregando..."; se der erro, avise o usuário.</p>
+        <details><summary>Dica</summary>Escreva "Carregando..." <b>antes</b> do <code>await fetch</code>. No <code>catch</code>, troque o texto pela mensagem de erro. Teste o erro com o Network em <b>Offline</b>.</details></div>
+      <div class="ex"><span class="where">index.html ou CodePen</span><h3>3) Cadastro</h3><p>Formulário (nome e e-mail) que faz POST em <code>/users</code> e mostra o status e o id devolvidos. Salve no localStorage e liste ao recarregar.</p>
+        <details><summary>Dica</summary>Lembre das 3 coisas do POST: <code>method</code>, <code>headers</code> e <code>body</code> com <code>JSON.stringify</code>. O id volta como 11. Print extra: Application › Local Storage.</details></div>
+      <div class="ex"><span class="where">Console, na aba do jsonplaceholder</span><h3>4) Tarefas com CRUD</h3><p><code>GET /todos?_limit=5</code> para listar, PATCH para marcar como concluída e DELETE para excluir (removendo da tela também).</p>
+        <details><summary>Dica</summary>PATCH manda só o que muda:
+<pre>fetch(`https://jsonplaceholder.typicode.com/todos/${id}`, {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ completed: true }),
+});</pre></details></div>
+      <div class="ex"><span class="where">Desafio bônus</span><h3>5) Busca de CEP</h3><p>No <code>blur</code> do input, consulte <code>viacep.com.br/ws/SEU_CEP/json/</code> e preencha rua, bairro e cidade.</p>
+        <details><summary>Dica</summary>Antes do fetch: se o CEP tiver menos de 8 dígitos, nem faça a requisição. CEP inexistente volta <b>200</b> com <code>{"erro": true}</code>: o <code>resposta.ok</code> não pega isso, teste o campo <code>dados.erro</code>.</details></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>API de estudo: <a href="https://jsonplaceholder.typicode.com" target="_blank" rel="noopener">jsonplaceholder.typicode.com</a> (finge que salva: responde, mas não guarda)</span>
+    <span>Nome do arquivo de entrega: Aula16_SeuNome.pdf + links</span>
+  </footer>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const KW = /^(const|let|var|function|return|for|of|in|if|else|async|await|new|throw|try|catch|typeof|true|false|null|undefined|class|this)$/;
+function hl(src) {
+  const re = /(\/\/.*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(src))) {
+    out += esc(src.slice(last, m.index));
+    if (m[1]) out += `<span class="t-com">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="t-str">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="t-num">${m[3]}</span>`;
+    else { const w = m[4]; out += KW.test(w) ? `<span class="t-kw">${w}</span>` : src[re.lastIndex] === "(" ? `<span class="t-fn">${w}</span>` : w; }
+    last = re.lastIndex;
+  }
+  return out + esc(src.slice(last));
+}
+
+/* =================== DADOS =================== */
+const HOST = "jsonplaceholder.typicode.com";
+const BASE = "https://" + HOST;
+const ORIGIN = "http://127.0.0.1:5500";
+const USERS = [
+  { id: 1, name: "Leanne Graham", username: "Bret", email: "Sincere@april.biz" },
+  { id: 2, name: "Ervin Howell", username: "Antonette", email: "Shanna@melissa.tv" },
+  { id: 3, name: "Clementine Bauch", username: "Samantha", email: "Nathan@yesenia.net" },
+  { id: 4, name: "Patricia Lebsack", username: "Karianne", email: "Julianne.OConner@kory.org" },
+  { id: 5, name: "Chelsey Dietrich", username: "Kamren", email: "Lucio_Hettinger@annie.ca" },
+  { id: 6, name: "Mrs. Dennis Schulist", username: "Leopoldo_Corkery", email: "Karley_Dach@jasper.info" },
+  { id: 7, name: "Kurtis Weissnat", username: "Elwyn.Skiles", email: "Telly.Hoeger@billy.biz" },
+  { id: 8, name: "Nicholas Runolfsdottir V", username: "Maxime_Nienow", email: "Sherwood@rosamond.me" },
+  { id: 9, name: "Glenna Reichert", username: "Delphine", email: "Chaim_McDermott@dana.io" },
+  { id: 10, name: "Clementina DuBuque", username: "Moriah.Stanton", email: "Rey.Padberg@karina.biz" }
+];
+const JSON_H = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "max-age=43200", "x-powered-by": "Express" };
+const reqH = (extra = {}) => ({ "accept": "*/*", "origin": ORIGIN, "referer": ORIGIN + "/", "sec-fetch-mode": "cors", ...extra });
+const T_FULL = { queue: 2, dns: 18, conn: 31, ssl: 22, sent: 0.3, wait: 118, dl: 4 };
+const T_REUSE = { queue: 1, dns: 0, conn: 0, ssl: 0, sent: 0.2, wait: 104, dl: 2 };
+const T_PRE = { queue: 1, dns: 18, conn: 31, ssl: 22, sent: 0.2, wait: 96, dl: 0.1 };
+
+// passos genéricos
+const P = {
+  dns: () => ({ a: "net", pk: ["nav", "net"], t: "DNS: descobrir o endereço", x: `Computadores conversam por números (IP), não por nomes. O navegador pergunta ao DNS qual é o IP de <code>${HOST}</code>. É como procurar o endereço na agenda; a resposta fica guardada (cache) para as próximas vezes.` }),
+  tls: () => ({ a: "net", t: "Conexão TCP + TLS (o cadeado)", x: `O navegador abre uma conexão com o servidor (o "aperto de mãos" TCP) e, como a URL é <code>https</code>, combina uma criptografia (TLS). A partir daqui, ninguém no caminho consegue ler a mensagem.` }),
+  reuse: () => ({ a: "net", pk: ["nav", "srv"], t: "Conexão reaproveitada", x: `DNS e TLS já foram feitos no preflight, então o navegador reaproveita a mesma conexão. Por isso a segunda linha no Network é mais rápida no começo.` })
+};
+const preflight = (method) => ({ a: "srv", pk: ["nav", "srv"], net: { pre: "done" }, t: "Preflight: o navegador pede licença", x: `Antes do ${method}, o navegador manda sozinho uma requisição <code>OPTIONS</code> perguntando: "este site (<code>${ORIGIN}</code>) pode mandar ${method} com JSON?". O servidor responde <b>204</b> com os headers de permissão. Você vê essa linha extra no Network. Isso é o CORS em ação.` });
+
+const SC = {
+  then: {
+    label: "GET com then", m: "GET", file: "then.js",
+    goal: "<b>Objetivo:</b> buscar a lista de usuários e mostrar no console, encadeando <code>.then()</code>.",
+    code: [
+      `fetch("https://jsonplaceholder.typicode.com/users")`,
+      `  .then((resposta) => resposta.json())   // 1. transforma em objeto`,
+      `  .then((usuarios) => console.log(usuarios)) // 2. usa os dados`,
+      `  .catch((erro) => console.error("Deu ruim:", erro)); // 3. se falhar`
+    ],
+    main: { name: "users", url: BASE + "/users", method: "GET", init: "then.js:1", status: 200, text: "OK", size: "5.6 kB", reqH: reqH(), resH: JSON_H, body: USERS, timing: T_FULL },
+    steps: [
+      { a: "js", lines: [1], pr: "pending", t: "fetch() é chamado", x: `O JavaScript chama <code>fetch(url)</code>. Ele <b>não espera</b> a resposta: devolve na hora uma Promise pendente, a "senha" do lanche. Os <code>.then()</code> ficam registrados para rodar depois.` },
+      { a: "nav", lines: [1], raw: "req", net: { main: "pending" }, t: "O navegador monta a requisição", x: `Sem <code>method</code>, o fetch faz <b>GET</b>. O navegador escreve a mensagem: método, caminho <code>/users</code>, o <code>Host</code> e headers que ele mesmo adiciona, como <code>Origin</code> (de onde vem o pedido). GET não tem body. A linha já aparece no Network como <i>pending</i>.` },
+      P.dns(), P.tls(),
+      { a: "srv", pk: ["net", "srv"], t: "O servidor processa", x: `A requisição chega. O servidor olha <b>método + caminho</b> (<code>GET /users</code>), encontra a rota certa e busca a lista de usuários. Ele não sabe nada do seu código: só vê a mensagem HTTP.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", t: "A resposta volta: 200 OK", x: `Chega a linha de status <b>200 OK</b>, os headers (<code>Content-Type: application/json</code>) e o corpo em <b>texto</b>. A Promise do fetch resolve com um objeto <code>Response</code>. O Network fica completo: clique nas abas Headers, Preview e Timing.` },
+      { a: "js", lines: [2], t: "1º .then(): resposta.json()", x: `O primeiro <code>.then</code> recebe o <code>Response</code>. O corpo ainda é texto, então <code>resposta.json()</code> lê e converte para objeto JS. Ele também devolve uma Promise, e o próximo <code>.then</code> espera por ela.` },
+      { a: "js", lines: [3], con: [["log", "(10) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]", "then.js:3"]], t: "2º .then(): usa os dados", x: `Agora <code>usuarios</code> é um array de verdade com 10 objetos. O <code>.catch</code> não rodou porque nada falhou. Cada <code>.then</code> recebe o resultado do anterior: uma corrente de passos.` }
+    ]
+  },
+  async: {
+    label: "GET com async/await", m: "GET", file: "async.js",
+    goal: "<b>Objetivo:</b> o mesmo GET, escrito de cima para baixo com <code>await</code> e protegido por <code>try/catch</code>.",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users";`, ``,
+      `async function carregarUsuarios() {`,
+      `  try {`,
+      `    const resposta = await fetch(API);`,
+      `    if (!resposta.ok) throw new Error("Status " + resposta.status);`,
+      `    const usuarios = await resposta.json();`,
+      `    console.log(usuarios);`,
+      `  } catch (erro) {`,
+      `    console.error("Falhou:", erro.message);`,
+      `  }`,
+      `}`,
+      `carregarUsuarios();`
+    ],
+    main: { name: "users", url: BASE + "/users", method: "GET", init: "async.js:5", status: 200, text: "OK", size: "5.6 kB", reqH: reqH(), resH: JSON_H, body: USERS, timing: T_FULL },
+    steps: [
+      { a: "js", lines: [13, 5], pr: "pending", t: "await fetch(API)", x: `<code>carregarUsuarios()</code> começa e chega no <code>fetch</code>. O <code>await</code> pausa <b>só esta função</b> até a Promise resolver. O resto da página continua livre: botões, animações, tudo funciona enquanto espera.` },
+      { a: "nav", lines: [5], raw: "req", net: { main: "pending" }, t: "O navegador monta a requisição", x: `GET para <code>/users</code>, com os headers que o navegador adiciona sozinho. A linha aparece no Network como <i>pending</i>.` },
+      P.dns(), P.tls(),
+      { a: "srv", pk: ["net", "srv"], t: "O servidor processa", x: `O servidor recebe <code>GET /users</code> e prepara a lista.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", lines: [5], t: "200 OK: o await termina", x: `A resposta chegou e a Promise resolveu. Agora <code>resposta</code> é um objeto <code>Response</code> com <code>status: 200</code> e <code>ok: true</code>. Atenção: ainda não são os dados, é o envelope.` },
+      { a: "js", lines: [6], t: "Conferir resposta.ok", x: `<code>resposta.ok</code> é <code>true</code> para qualquer status de 200 a 299. Aqui é 200, então o <code>throw</code> não acontece e o código segue.` },
+      { a: "js", lines: [7], t: "await resposta.json()", x: `O corpo é lido e convertido de texto para objeto. Também é assíncrono, por isso o segundo <code>await</code>. Se esquecer o <code>.json()</code>, você fica com o envelope na mão.` },
+      { a: "js", lines: [8], con: [["log", "(10) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]", "async.js:8"]], t: "Usar os dados", x: `<code>usuarios</code> é um array com 10 objetos. Veja o mesmo conteúdo na aba <b>Preview</b> do Network. O <code>catch</code> não rodou.` }
+    ]
+  },
+  e404: {
+    label: "404: a pegadinha", m: "GET", file: "async.js",
+    goal: "<b>Pegadinha:</b> o fetch <b>não</b> cai no catch com 404 ou 500. Ele só falha se a rede cair. Por isso testamos <code>resposta.ok</code>.",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users/999"; // não existe`, ``,
+      `async function carregarUsuario() {`,
+      `  try {`,
+      `    const resposta = await fetch(API);`,
+      `    if (!resposta.ok) throw new Error("Status " + resposta.status);`,
+      `    const usuario = await resposta.json();`,
+      `    console.log(usuario);`,
+      `  } catch (erro) {`,
+      `    console.error("Falhou:", erro.message);`,
+      `  }`,
+      `}`,
+      `carregarUsuario();`
+    ],
+    main: { name: "999", url: BASE + "/users/999", method: "GET", init: "async.js:5", status: 404, text: "Not Found", size: "0.7 kB", reqH: reqH(), resH: JSON_H, body: {}, timing: T_FULL },
+    steps: [
+      { a: "js", lines: [13, 5], pr: "pending", t: "await fetch(API)", x: `Pedimos o usuário <b>999</b>, que não existe (a API só tem 10).` },
+      { a: "nav", lines: [5], raw: "req", net: { main: "pending" }, t: "O navegador monta a requisição", x: `GET para <code>/users/999</code>. A mensagem é igual a qualquer GET; o navegador não sabe que o recurso não existe.` },
+      P.dns(), P.tls(),
+      { a: "srv", pk: ["net", "srv"], t: "O servidor procura… e não acha", x: `O servidor entende o pedido, mas não tem usuário 999. Ele responde normalmente, só que com <b>404 Not Found</b>.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", lines: [5], con: [["error", "GET https://jsonplaceholder.typicode.com/users/999 404 (Not Found)", "async.js:5"]], t: "404 chegou… e a Promise RESOLVEU", x: `Aqui está a pegadinha: para o fetch, <b>uma resposta chegou</b>, então a Promise fica <i>fulfilled</i>, não <i>rejected</i>. O catch <b>não</b> roda sozinho. O Chrome mostra a linha vermelha no console só como aviso, e o Network pinta a linha de vermelho.` },
+      { a: "js", lines: [6], pr: "rejected", t: "!resposta.ok → throw", x: `<code>resposta.ok</code> é <code>false</code> (404 está fora de 200–299). Nós mesmos lançamos o erro com <code>throw</code>. Sem esta linha, o código seguiria feliz e mostraria <code>{}</code> como se fosse um usuário.` },
+      { a: "js", lines: [10], con: [["error", "Falhou: Status 404", "async.js:10"]], t: "O catch pega o erro", x: `O <code>throw</code> pula direto para o <code>catch</code>. As linhas 7 e 8 nunca rodaram. Agora sim o erro é tratado e dá para avisar o usuário na tela.` }
+    ]
+  },
+  post: {
+    label: "POST: criar", m: "POST", file: "post.js",
+    goal: "<b>3 coisas</b> do POST: <code>method</code>, <code>headers</code> e o <code>body</code> em texto (<code>JSON.stringify</code>).",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users";`,
+      `const novoUsuario = { name: "Lisiane", email: "lisiane@email.com" };`, ``,
+      `const resposta = await fetch(API, {`,
+      `  method: "POST",`,
+      `  headers: { "Content-Type": "application/json" },`,
+      `  body: JSON.stringify(novoUsuario),`,
+      `});`,
+      `const criado = await resposta.json();`,
+      `console.log(resposta.status, criado); // 201 { id: 11, ... }`
+    ],
+    pre: { name: "users", url: BASE + "/users", method: "OPTIONS", init: "Preflight", status: 204, text: "No Content", size: "0.4 kB", type: "preflight", reqH: { "accept": "*/*", "access-control-request-method": "POST", "access-control-request-headers": "content-type", "origin": ORIGIN }, resH: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,HEAD,PUT,PATCH,POST,DELETE", "access-control-allow-headers": "content-type" }, body: null, timing: T_PRE },
+    main: { name: "users", url: BASE + "/users", method: "POST", init: "post.js:4", status: 201, text: "Created", size: "0.8 kB", reqH: reqH({ "content-type": "application/json" }), payload: { name: "Lisiane", email: "lisiane@email.com" }, resH: { ...JSON_H, "location": BASE + "/users/11" }, body: { name: "Lisiane", email: "lisiane@email.com", id: 11 }, timing: T_REUSE },
+    steps: [
+      { a: "js", lines: [2], t: "O objeto que queremos criar", x: `<code>novoUsuario</code> é um objeto JavaScript. Ele vive na memória do seu navegador e <b>não pode viajar</b> como objeto: pela rede só passa texto.` },
+      { a: "js", lines: [4, 5, 6, 7, 8], pr: "pending", t: "fetch com opções", x: `O segundo argumento do fetch traz as 3 coisas: <code>method: "POST"</code> (criar), o header <code>Content-Type</code> (avisa que o body é JSON) e o <code>body</code> já convertido em texto com <code>JSON.stringify</code>. Sem o stringify, iria o texto inútil <code>[object Object]</code>.` },
+      { a: "nav", lines: [4], raw: "req", t: "O navegador monta a requisição", x: `Veja a mensagem: método POST, headers e, depois de uma linha em branco, o <b>body</b>. Como é POST com JSON para outro site, o navegador precisa pedir licença antes.` },
+      P.dns(), P.tls(),
+      preflight("POST"), P.reuse(),
+      { a: "srv", net: { main: "pending" }, t: "O servidor \"cria\" o usuário", x: `O servidor lê o body, transforma de volta em objeto e cria o recurso com um id novo (11, porque já existem 10). O JSONPlaceholder <b>finge</b> que salvou: responde certinho, mas não guarda de verdade.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", t: "201 Created", x: `Status <b>201</b> significa "criado". O header <code>Location</code> diz onde o novo recurso mora (<code>/users/11</code>) e o body devolve o que foi criado, já com o id.` },
+      { a: "js", lines: [9], t: "await resposta.json()", x: `Converte a resposta de texto para objeto.` },
+      { a: "js", lines: [10], con: [["log", `<span style="color:var(--t-num)">201</span> {name: <span style="color:var(--t-str)">'Lisiane'</span>, email: <span style="color:var(--t-str)">'lisiane@email.com'</span>, id: <span style="color:var(--t-num)">11</span>}`, "post.js:10"]], t: "Resultado", x: `<code>201</code> e o objeto com <code>id: 11</code>. Na aba <b>Payload</b> do Network você confere exatamente o que foi enviado. Na entrega, é esse print que eu quero ver.` }
+    ]
+  },
+  put: {
+    label: "PUT: atualizar", m: "PUT", file: "put.js",
+    goal: "<b>UPDATE:</b> troca os dados do usuário 1 inteiro. A URL termina com o id do recurso.",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users";`, ``,
+      `// UPDATE: troca os dados do usuário 1`,
+      `const resposta = await fetch(\`\${API}/1\`, {`,
+      `  method: "PUT",`,
+      `  headers: { "Content-Type": "application/json" },`,
+      `  body: JSON.stringify({ id: 1, name: "Novo nome", email: "novo@email.com" }),`,
+      `});`,
+      `console.log(resposta.status, await resposta.json());`
+    ],
+    pre: { name: "1", url: BASE + "/users/1", method: "OPTIONS", init: "Preflight", status: 204, text: "No Content", size: "0.4 kB", type: "preflight", reqH: { "accept": "*/*", "access-control-request-method": "PUT", "access-control-request-headers": "content-type", "origin": ORIGIN }, resH: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,HEAD,PUT,PATCH,POST,DELETE", "access-control-allow-headers": "content-type" }, body: null, timing: T_PRE },
+    main: { name: "1", url: BASE + "/users/1", method: "PUT", init: "put.js:4", status: 200, text: "OK", size: "0.7 kB", reqH: reqH({ "content-type": "application/json" }), payload: { id: 1, name: "Novo nome", email: "novo@email.com" }, resH: JSON_H, body: { id: 1, name: "Novo nome", email: "novo@email.com" }, timing: T_REUSE },
+    steps: [
+      { a: "js", lines: [4], pr: "pending", t: "A URL com o id", x: `A template string <code>\`\${API}/1\`</code> vira <code>${BASE}/users/1</code>. Em GET de lista, a URL aponta para a coleção; em PUT, PATCH e DELETE, aponta para <b>um</b> recurso.` },
+      { a: "js", lines: [5, 6, 7], t: "PUT manda o recurso inteiro", x: `PUT <b>substitui</b> o recurso todo (trocar o prato todo). Por isso mandamos id, name e email. Se quisesse mudar só o e-mail, o certo seria PATCH (só mais sal).` },
+      { a: "nav", lines: [4], raw: "req", t: "O navegador monta a requisição", x: `Método PUT, caminho <code>/users/1</code>, JSON no body.` },
+      P.dns(), P.tls(),
+      preflight("PUT"), P.reuse(),
+      { a: "srv", net: { main: "pending" }, t: "O servidor substitui", x: `O servidor troca os dados do usuário 1 pelos novos (de mentirinha, no JSONPlaceholder).` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", t: "200 OK", x: `Update bem-sucedido costuma responder <b>200</b> com o recurso atualizado.` },
+      { a: "js", lines: [9], con: [["log", `<span style="color:var(--t-num)">200</span> {id: <span style="color:var(--t-num)">1</span>, name: <span style="color:var(--t-str)">'Novo nome'</span>, email: <span style="color:var(--t-str)">'novo@email.com'</span>}`, "put.js:9"]], t: "Resultado", x: `Status 200 e o usuário com os dados novos.` }
+    ]
+  },
+  del: {
+    label: "DELETE: remover", m: "DELETE", file: "delete.js",
+    goal: "<b>DELETE:</b> remove o usuário 1. Não precisa de body nem de headers.",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users";`, ``,
+      `// DELETE: remove o usuário 1`,
+      `const resposta = await fetch(\`\${API}/1\`, { method: "DELETE" });`,
+      `console.log(resposta.status); // 200`
+    ],
+    pre: { name: "1", url: BASE + "/users/1", method: "OPTIONS", init: "Preflight", status: 204, text: "No Content", size: "0.4 kB", type: "preflight", reqH: { "accept": "*/*", "access-control-request-method": "DELETE", "origin": ORIGIN }, resH: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,HEAD,PUT,PATCH,POST,DELETE" }, body: null, timing: T_PRE },
+    main: { name: "1", url: BASE + "/users/1", method: "DELETE", init: "delete.js:4", status: 200, text: "OK", size: "0.5 kB", reqH: reqH(), resH: JSON_H, body: {}, timing: T_REUSE },
+    steps: [
+      { a: "js", lines: [4], pr: "pending", t: "fetch com method DELETE", x: `Só o método e a URL com o id. Não há o que enviar no body.` },
+      { a: "nav", lines: [4], raw: "req", t: "O navegador monta a requisição", x: `<code>DELETE /users/1</code>. Mesmo sem body, DELETE não é um método "simples" para o CORS, então vem preflight.` },
+      P.dns(), P.tls(),
+      preflight("DELETE"), P.reuse(),
+      { a: "srv", net: { main: "pending" }, t: "O servidor remove", x: `O servidor apaga o recurso (de mentirinha).` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", t: "200 OK com corpo vazio", x: `Responde 200 com <code>{}</code>. Outras APIs usam <b>204 No Content</b> para DELETE: deu certo e não há nada para devolver.` },
+      { a: "js", lines: [5], con: [["log", `<span style="color:var(--t-num)">200</span>`, "delete.js:5"]], t: "Resultado", x: `Na sua lista de tarefas (exercício 4), é aqui que você também remove o item da tela.` }
+    ]
+  },
+  noawait: {
+    label: "Esqueci o await", m: "GET", file: "sem-await.js",
+    goal: "<b>Tropeço comum:</b> sem <code>await</code>, a variável guarda a <b>senha</b> (a Promise), não o lanche.",
+    code: [
+      `const API = "https://jsonplaceholder.typicode.com/users";`, ``,
+      `async function carregarUsuarios() {`,
+      `  const resposta = fetch(API);        // faltou o await!`,
+      `  console.log(resposta);`,
+      `  const usuarios = resposta.json();   // 💥`,
+      `  console.log(usuarios);`,
+      `}`,
+      `carregarUsuarios();`
+    ],
+    main: { name: "users", url: BASE + "/users", method: "GET", init: "sem-await.js:4", status: 200, text: "OK", size: "5.6 kB", reqH: reqH(), resH: JSON_H, body: USERS, timing: T_FULL },
+    steps: [
+      { a: "js", lines: [9, 4], pr: "pending", raw: "req", net: { main: "pending" }, t: "fetch sem await", x: `O fetch dispara a requisição normalmente e devolve a Promise. Mas sem <code>await</code> o código <b>não espera</b>: segue imediatamente para a próxima linha.` },
+      { a: "js", lines: [5], con: [["log", "Promise {&lt;pending&gt;}", "sem-await.js:5"]], t: "Promise {<pending>}", x: `O console mostra <code>Promise {&lt;pending&gt;}</code>: você imprimiu a senha, não o lanche. A requisição ainda está viajando.` },
+      { a: "js", lines: [6], con: [["error", "Uncaught (in promise) TypeError: resposta.json is not a function", "sem-await.js:6"]], t: "💥 TypeError", x: `<code>.json()</code> existe no <code>Response</code>, não na Promise. Por isso <i>resposta.json is not a function</i>. A função para aqui; a linha 7 nunca roda.` },
+      P.dns(), P.tls(),
+      { a: "srv", pk: ["net", "srv"], t: "Enquanto isso, o servidor responde", x: `Ironia: a requisição segue o caminho normal, porque o navegador já a enviou.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "fulfilled", t: "200 OK… tarde demais", x: `A resposta chega com <b>200</b> e os dados certinhos, visíveis no Network. Mas o seu código já tinha passado reto e quebrado. <b>Lição:</b> se o Network mostra 200 e o console mostra Promise, procure o <code>await</code> que falta.` }
+    ]
+  },
+  cors: {
+    label: "Erro de CORS", m: "GET", file: "cors.js",
+    goal: "<b>CORS:</b> o servidor não autorizou o seu site. Não é bug do seu JS, é uma regra de segurança do navegador.",
+    code: [
+      `// página aberta em http://127.0.0.1:5500 (Live Server)`,
+      `const API = "https://api.lojaexemplo.com.br/produtos";`, ``,
+      `async function carregarProdutos() {`,
+      `  try {`,
+      `    const resposta = await fetch(API);`,
+      `    const produtos = await resposta.json();`,
+      `    console.log(produtos);`,
+      `  } catch (erro) {`,
+      `    console.error("Falhou:", erro.message);`,
+      `  }`,
+      `}`,
+      `carregarProdutos();`
+    ],
+    host: "api.lojaexemplo.com.br",
+    main: { name: "produtos", url: "https://api.lojaexemplo.com.br/produtos", method: "GET", init: "cors.js:6", status: "CORS error", text: "", size: "0 B", reqH: reqH(), resH: { "content-type": "application/json; charset=utf-8" }, body: null, cors: true, timing: T_FULL },
+    steps: [
+      { a: "js", lines: [13, 6], pr: "pending", t: "await fetch(API)", x: `Nossa página está em <code>${ORIGIN}</code> e pede dados de <b>outro</b> endereço: <code>api.lojaexemplo.com.br</code>. Origens diferentes = requisição <i>cross-origin</i>.` },
+      { a: "nav", lines: [6], raw: "req", net: { main: "pending" }, t: "O navegador avisa de onde vem", x: `O navegador coloca o header <code>Origin: ${ORIGIN}</code>. É com ele que o servidor decide se aceita o seu site.` },
+      { a: "net", pk: ["nav", "net"], t: "DNS + TCP + TLS", x: `O caminho até o servidor é o mesmo de sempre.` },
+      { a: "srv", pk: ["net", "srv"], t: "O servidor responde… sem permissão", x: `O servidor até responde, mas <b>não</b> manda o header <code>Access-Control-Allow-Origin</code>. Ou seja, ele não disse que o seu site pode ler aquilo.` },
+      { a: "nav", pk: ["srv", "nav"], raw: "res", net: { main: "done" }, pr: "rejected", con: [["error", `Access to fetch at 'https://api.lojaexemplo.com.br/produtos' from origin '${ORIGIN}' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.`, "127.0.0.1/:1"]], t: "O navegador bloqueia", x: `Quem barra é o <b>navegador</b>, para proteger o usuário. A resposta chegou, mas o JavaScript não pode ler. A Promise é <i>rejected</i> e o Network mostra <b>CORS error</b>.` },
+      { a: "js", lines: [10], con: [["error", "Falhou: Failed to fetch", "cors.js:10"]], t: "O catch recebe \"Failed to fetch\"", x: `O erro que chega ao seu código é genérico (<code>TypeError: Failed to fetch</code>), o mesmo de quando a internet cai. <b>Como resolver:</b> quem libera é o dono da API. Para estudar, use APIs que liberam CORS (JSONPlaceholder, dog.ceo, ViaCEP) ou rode o código no Console da própria aba da API, como eu pedi nos exercícios 1 e 4.` }
+    ]
+  }
+};
+const ORDER = ["then", "async", "e404", "post", "put", "del", "noawait", "cors"];
+
+/* =================== SIMULADOR =================== */
+let sc = SC.async, si = -1, playT = null, selRow = "main", detTab = "headers";
+$("#scen").innerHTML = ORDER.map(k => `<button data-k="${k}" aria-pressed="false"><span class="mtag">${SC[k].m}</span>${SC[k].label}</button>`).join("");
+$("#scen").addEventListener("click", e => { const b = e.target.closest("button"); if (b) load(b.dataset.k); });
+
+function stateAt(i) {
+  const st = { net: {}, con: [], raw: null, pr: null };
+  for (let k = 0; k <= i; k++) {
+    const s = sc.steps[k];
+    if (s.net) Object.assign(st.net, s.net);
+    if (s.con) st.con.push(...s.con);
+    if (s.raw) st.raw = s.raw;
+    if (s.pr) st.pr = s.pr;
+  }
+  return st;
+}
+function load(k, step = -1) {
+  stopPlay(); sc = SC[k]; selRow = "main";
+  $$("#scen button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+  $("#fname").textContent = sc.file; $("#goal").innerHTML = sc.goal;
+  $("#prog").innerHTML = sc.steps.map((_, i) => `<i data-i="${i}" title="Passo ${i + 1}"></i>`).join("");
+  go(step);
+}
+function go(i) {
+  si = Math.max(-1, Math.min(sc.steps.length - 1, i));
+  const s = sc.steps[si], st = si >= 0 ? stateAt(si) : { net: {}, con: [], raw: null, pr: null };
+  const lines = s && s.lines ? s.lines : [];
+  $("#code").innerHTML = sc.code.map((l, n) => `<div class="cl${lines.includes(n + 1) ? " on" : ""}"><span class="g">${n + 1}</span><span class="c">${hl(l) || " "}</span></div>`).join("");
+  $$(".actor").forEach(a => a.classList.toggle("on", !!s && a.dataset.a === s.a));
+  $$("#promise .pstate").forEach(p => p.classList.toggle("on", p.classList.contains(st.pr || "_")));
+  const who = { js: ["Seu código", "var(--c-js)"], nav: ["Navegador", "var(--c-nav)"], net: ["Internet", "var(--c-net)"], srv: ["Servidor", "var(--c-srv)"] };
+  $("#caption").innerHTML = s
+    ? `<div class="who" style="color:${who[s.a][1]}">${who[s.a][0]} · passo ${si + 1}</div><h3>${esc(s.t)}</h3><p>${s.x}</p>`
+    : `<div class="who muted">Pronto para começar</div><h3>${esc(sc.label)}</h3><p>Clique em <b>Próximo passo</b> (ou use a seta → do teclado) para ver cada etapa da requisição, do código até o servidor e de volta.</p>`;
+  // mensagem crua
+  if (st.raw) { $("#rawBox").hidden = false; const r = st.raw === "req" ? (st.net.pre && st.raw === "req" && !st.net.main ? sc.main : sc.main) : sc.main; $("#rawTitle").textContent = st.raw === "req" ? "Requisição que sai do navegador" : "Resposta que volta do servidor"; $("#raw").innerHTML = st.raw === "req" ? rawReq(r) : rawRes(r); }
+  else $("#rawBox").hidden = true;
+  // progresso
+  $$("#prog i").forEach((b, k) => { b.className = k < si ? "done" : k === si ? "cur" : ""; });
+  $("#stepn").textContent = si < 0 ? `0/${sc.steps.length}` : `${si + 1}/${sc.steps.length}`;
+  $("#prev").disabled = si < 0; $("#next").disabled = si >= sc.steps.length - 1;
+  $("#next").textContent = si < 0 ? "Começar →" : "Próximo passo →";
+  renderNet(st); renderCon(st);
+  if (s && s.pk) animatePacket(s.pk[0], s.pk[1]);
+}
+$("#next").addEventListener("click", () => go(si + 1));
+$("#prev").addEventListener("click", () => go(si - 1));
+$("#prog").addEventListener("click", e => { const b = e.target.closest("i"); if (b) { stopPlay(); go(+b.dataset.i); } });
+function stopPlay() { clearInterval(playT); playT = null; $("#play").textContent = "▶ Rodar tudo"; }
+$("#play").addEventListener("click", () => {
+  if (playT) return stopPlay();
+  if (si >= sc.steps.length - 1) go(-1);
+  $("#play").textContent = "⏸ Pausar";
+  go(si + 1);
+  playT = setInterval(() => { if (si >= sc.steps.length - 1) return stopPlay(); go(si + 1); }, 2600);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.closest("textarea, input")) return;
+  const r = $(".sim").getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+  if (e.key === "ArrowRight") { stopPlay(); go(si + 1); } else if (e.key === "ArrowLeft") { stopPlay(); go(si - 1); }
+});
+function animatePacket(from, to) {
+  const box = $("#actors"), pk = $("#packet");
+  const A = box.querySelector(`[data-a="${from}"]`).getBoundingClientRect(), B = box.querySelector(`[data-a="${to}"]`).getBoundingClientRect(), C = box.getBoundingClientRect();
+  const p = (R) => [R.left - C.left + R.width / 2 - 8, R.top - C.top + R.height / 2 - 8];
+  const [x1, y1] = p(A), [x2, y2] = p(B);
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !pk.animate) return;
+  pk.animate([{ transform: `translate(${x1}px,${y1}px)`, opacity: 0 }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .85 }, { transform: `translate(${x2}px,${y2}px)`, opacity: 0 }], { duration: 900, easing: "ease-in-out" });
+}
+
+/* mensagens HTTP cruas */
+function hName(h) { return h.replace(/(^|-)([a-z])/g, (m, a, b) => a + b.toUpperCase()); }
+function rawReq(r) {
+  const u = new URL(r.url); const lines = [`<span class="sl"><span class="m">${r.method}</span> ${esc(u.pathname + u.search)} HTTP/1.1</span>`, `<span class="hn">Host</span>: ${u.host}`];
+  Object.entries(r.reqH).forEach(([k, v]) => { if (!k.startsWith("sec-") && k !== "referer") lines.push(`<span class="hn">${hName(k)}</span>: ${esc(v)}`); });
+  if (r.payload) { const b = JSON.stringify(r.payload); lines.push(`<span class="hn">Content-Length</span>: ${b.length}`, "", `<span class="bd">${esc(b)}</span>`); }
+  return lines.join("\n");
+}
+function rawRes(r) {
+  if (r.cors) return `<span class="sl">HTTP/1.1 <span class="s2">200 OK</span></span>\n<span class="hn">Content-Type</span>: application/json; charset=utf-8\n<span class="muted">(sem Access-Control-Allow-Origin)</span>\n\n<span class="muted">🔒 corpo bloqueado pelo navegador: o JavaScript não pode ler</span>`;
+  const cls = r.status >= 400 ? "s4" : "s2";
+  const lines = [`<span class="sl">HTTP/1.1 <span class="${cls}">${r.status} ${r.text}</span></span>`];
+  Object.entries(r.resH).forEach(([k, v]) => lines.push(`<span class="hn">${hName(k)}</span>: ${esc(v)}`));
+  if (r.body !== null) { let b = JSON.stringify(r.body, null, 2); if (Array.isArray(r.body)) b = JSON.stringify(r.body.slice(0, 2), null, 2).replace(/\n]$/, ",\n  … mais 8 usuários\n]"); lines.push("", `<span class="bd">${esc(b)}</span>`); }
+  return lines.join("\n");
+}
+
+/* =================== NETWORK =================== */
+function rowsFor(st) {
+  const rows = [];
+  if (sc.pre && st.net.pre) rows.push({ id: "pre", r: sc.pre, state: st.net.pre });
+  if (st.net.main) rows.push({ id: "main", r: sc.main, state: st.net.main });
+  return rows;
+}
+function renderNet(st) {
+  const rows = rowsFor(st);
+  $("#netEmpty").hidden = rows.length > 0;
+  if (!rows.find(x => x.id === selRow)) selRow = rows.length ? rows[rows.length - 1].id : "main";
+  $("#netRows").innerHTML = rows.map(({ id, r, state }) => {
+    const pend = state === "pending";
+    const fail = !pend && (r.cors || r.status >= 400);
+    const tt = Object.values(r.timing).reduce((a, b) => a + b, 0);
+    return `<tr data-id="${id}" class="${id === selRow ? "sel " : ""}${pend ? "pend" : fail ? "fail" : ""}"><td>${esc(r.name)}</td><td>${r.method}</td><td>${pend ? "(pending)" : esc(r.status)}</td><td>${r.type || "fetch"}</td><td>${r.init}</td><td>${pend ? "0 B" : r.size}</td><td>${pend ? "Pending" : Math.round(tt) + " ms"}</td></tr>`;
+  }).join("");
+  const cur = rows.find(x => x.id === selRow);
+  renderDet(cur);
+}
+$("#netRows").addEventListener("click", e => { const tr = e.target.closest("tr"); if (!tr) return; selRow = tr.dataset.id; renderNet(stateAt(si)); });
+$("#detTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; detTab = b.dataset.t; $$("#detTabs button").forEach(x => x.setAttribute("aria-selected", String(x === b))); renderNet(stateAt(si)); });
+const HINT = {
+  headers: `<b>Headers</b>: confira a <b>Request URL</b>, o <b>Method</b> e o <b>Status Code</b>. Abaixo, o que o servidor mandou (Response) e o que o navegador mandou (Request).`,
+  payload: `<b>Payload</b> mostra o body que <b>você enviou</b>. Só existe em POST, PUT e PATCH.`,
+  preview: `<b>Preview</b> mostra a resposta organizada, como objeto. Clique para abrir os itens.`,
+  response: `<b>Response</b> mostra o texto cru que chegou. É isso que o <code>.json()</code> transforma em objeto.`,
+  timing: `<b>Timing</b> divide o tempo. <b>Waiting (TTFB)</b> é o servidor pensando; se ele domina, o problema é a API, não a sua internet.`
+};
+function treeHTML(v, key) {
+  const lab = key !== undefined ? `<span class="k">${esc(key)}</span>: ` : "";
+  if (v === null) return `<li>${lab}<span class="muted">null</span></li>`;
+  if (typeof v === "object") {
+    const ent = Object.entries(v); const prev = Array.isArray(v) ? `(${v.length}) [{…}, …]` : `{${ent.slice(0, 3).map(([k, x]) => `${k}: ${typeof x === "object" ? "…" : JSON.stringify(x)}`).join(", ")}${ent.length > 3 ? ", …" : ""}}`;
+    if (!ent.length) return `<li>${lab}${Array.isArray(v) ? "[]" : "{}"}</li>`;
+    return `<li><details${key === undefined ? " open" : ""}><summary>${lab}<span class="muted">${esc(prev)}</span></summary><ul class="tree">${ent.map(([k, x]) => treeHTML(x, k)).join("")}</ul></details></li>`;
+  }
+  return `<li>${lab}<span class="${typeof v === "string" ? "vs" : "vn"}">${esc(JSON.stringify(v))}</span></li>`;
+}
+function renderDet(cur) {
+  const b = $("#detBody");
+  if (!cur) { b.innerHTML = `<span class="muted" style="font-family:var(--font-body)">Selecione uma requisição.</span><p class="hint">${HINT[detTab]}</p>`; return; }
+  const { r, state } = cur; const pend = state === "pending";
+  let h = "";
+  if (detTab === "headers") {
+    const color = pend ? "var(--muted)" : r.cors || r.status >= 400 ? "var(--err)" : "var(--ok)";
+    h = `<div class="hsec"><b>General</b>
+      <div class="hrow key"><span>Request URL</span><span>${esc(r.url)}</span></div>
+      <div class="hrow key"><span>Request Method</span><span>${r.method}</span></div>
+      <div class="hrow key"><span>Status Code</span><span><i class="dot" style="background:${color}"></i>${pend ? "(pending)" : r.cors ? "CORS error" : r.status + " " + r.text}</span></div>
+      <div class="hrow"><span>Remote Address</span><span>${pend ? "—" : "104.21.x.x:443 (exemplo)"}</span></div>
+      <div class="hrow"><span>Referrer Policy</span><span>strict-origin-when-cross-origin</span></div></div>`;
+    if (!pend) h += `<div class="hsec"><b>Response Headers</b>${Object.entries(r.resH).map(([k, v]) => `<div class="hrow"><span>${k}</span><span>${esc(v)}</span></div>`).join("")}</div>`;
+    h += `<div class="hsec"><b>Request Headers</b>${Object.entries(r.reqH).map(([k, v]) => `<div class="hrow"><span>${k}</span><span>${esc(v)}</span></div>`).join("")}</div>`;
+  } else if (detTab === "payload") {
+    h = r.payload ? `<b style="font-family:var(--font-body)">Request Payload</b><ul class="tree" style="padding-left:0">${treeHTML(r.payload)}</ul><div class="muted" style="margin-top:6px">view source: ${esc(JSON.stringify(r.payload))}</div>` : `<span class="muted" style="font-family:var(--font-body)">Esta requisição não tem payload (${r.method} não envia body).</span>`;
+  } else if (detTab === "preview" || detTab === "response") {
+    if (pend) h = `<span class="muted" style="font-family:var(--font-body)">Ainda esperando a resposta…</span>`;
+    else if (r.cors) h = `<span style="color:var(--err);font-family:var(--font-body)">Failed to load response data: o navegador bloqueou a leitura (CORS).</span>`;
+    else if (r.body === null) h = `<span class="muted" style="font-family:var(--font-body)">Sem corpo (${r.status} ${r.text}).</span>`;
+    else h = detTab === "preview" ? `<ul class="tree" style="padding-left:0">${treeHTML(r.body)}</ul>` : `<pre style="margin:0;white-space:pre-wrap;word-break:break-all">${esc(JSON.stringify(r.body))}</pre>`;
+  } else if (detTab === "timing") {
+    if (pend) h = `<span class="muted" style="font-family:var(--font-body)">Ainda em andamento…</span>`;
+    else {
+      const t = r.timing; const parts = [["Queueing", t.queue, "#9aa3b5"], ["DNS Lookup", t.dns, "#16a3a3"], ["Initial connection", t.conn, "#e08a2c"], ["SSL", t.ssl, "#b45cd6"], ["Request sent", t.sent, "#2d6fd6"], ["Waiting (TTFB)", t.wait, "#18a058"], ["Content Download", t.dl, "#2d6fd6"]];
+      const tot = parts.reduce((a, p) => a + p[1], 0); let acc = 0;
+      h = parts.map(([n, v, c]) => { const left = acc / tot * 100, w = Math.max(.6, v / tot * 100); acc += v; return `<div class="tbar"><span>${n}</span><span class="track">${v ? `<i style="left:${left}%;width:${w}%;background:${c}"></i>` : ""}</span><span>${v ? (v < 1 ? v.toFixed(1) : Math.round(v)) + " ms" : "—"}</span></div>`; }).join("") + `<div class="tbar" style="margin-top:6px;font-weight:700"><span>Total</span><span></span><span>${Math.round(tot)} ms</span></div>`;
+    }
+  }
+  b.innerHTML = h + `<p class="hint">${HINT[detTab]}</p>`;
+}
+function renderCon(st) {
+  $("#con").innerHTML = st.con.length ? st.con.map(([t, html, link]) => `<div class="ln ${t}"><span class="ic">${t === "error" ? "⨯" : t === "warn" ? "⚠" : ""}</span><span class="bd">${html}</span>${link ? `<span class="lk">${esc(link)}</span>` : ""}</div>`).join("") : `<div class="ln"><span class="ic"></span><span class="bd muted">Nada no console ainda.</span></div>`;
+}
+
+$$("[data-go]").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.go; load(k, b.dataset.step !== undefined ? +b.dataset.step : -1);
+  $("#scen").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}));
+
+/* =================== URL =================== */
+const URLX = [
+  ["Protocolo", "<code>https://</code> diz que a conversa usa HTTP com criptografia (o S é de <i>secure</i>). Com <code>http://</code> sem S, tudo viaja aberto."],
+  ["Domínio (host)", "O nome do servidor. O DNS transforma esse nome em um endereço IP. É ele que aparece no header <code>Host</code>."],
+  ["Porta", "A \"porta\" do servidor. <code>443</code> é o padrão do https (e 80 do http), por isso quase nunca escrevemos. No Live Server você vê <code>:5500</code>."],
+  ["Caminho (recurso)", "Qual recurso queremos: <code>/users</code> é a coleção de usuários. Em uma API, o caminho costuma ser um substantivo no plural."],
+  ["Id", "<code>/1</code> aponta para <b>um</b> usuário específico. É assim que PUT, PATCH e DELETE sabem em quem mexer."],
+  ["Query string", "Depois do <code>?</code> vêm parâmetros <code>chave=valor</code>, separados por <code>&amp;</code>. <code>_limit=5</code> pede só 5 itens, como no exercício 4 (<code>/todos?_limit=5</code>)."]
+];
+function urlSel(i) { $$("#url span").forEach(s => s.classList.toggle("on", +s.dataset.u === i)); $("#urlx").innerHTML = `<b>${URLX[i][0]}</b><p style="margin:4px 0 0">${URLX[i][1]}</p>`; }
+$$("#url span").forEach(s => { s.addEventListener("click", () => urlSel(+s.dataset.u)); s.addEventListener("mouseenter", () => urlSel(+s.dataset.u)); });
+
+/* =================== MENSAGEM =================== */
+const MSG = {
+  start: ["Linha de pedido", "Método (<b>POST</b>), caminho (<code>/users</code>) e versão do protocolo. É a primeira coisa que o servidor lê para saber o que fazer."],
+  host: ["Host", "Qual site queremos. Um mesmo servidor pode hospedar vários domínios."],
+  ctype: ["Content-Type", "Avisa o formato do body. Sem <code>application/json</code>, o servidor pode não entender os dados. É o header que colocamos no fetch."],
+  accept: ["Accept", "Que formatos de resposta aceitamos. <code>*/*</code> = qualquer um. O navegador coloca sozinho."],
+  origin: ["Origin", "De qual site vem o pedido. O navegador coloca sozinho e o servidor usa para decidir o CORS."],
+  blank: ["Linha em branco", "Separa os headers do body. É regra do protocolo."],
+  body: ["Body", "Os dados enviados, sempre em texto. É o resultado do <code>JSON.stringify(novoUsuario)</code>. GET e DELETE normalmente não têm body."],
+  status: ["Linha de status", "Versão + código + frase. <b>201 Created</b>: o recurso foi criado. É o que <code>resposta.status</code> devolve no JS."],
+  rctype: ["Content-Type da resposta", "O servidor avisa que mandou JSON. Por isso <code>resposta.json()</code> funciona."],
+  acao: ["Access-Control-Allow-Origin", "A permissão do CORS: <code>*</code> = qualquer site pode ler. Se esse header faltar, o navegador bloqueia."],
+  location: ["Location", "Onde o recurso recém-criado mora. Comum em respostas 201."],
+  rbody: ["Body da resposta", "O que o servidor devolveu, em texto. Repare no <code>id: 11</code> que ele gerou."]
+};
+function msgSel(k) { $$(".msg pre span").forEach(s => s.classList.toggle("on", s.dataset.m === k)); $("#msgx").innerHTML = `<b style="font-family:var(--font-display);font-size:17px">${MSG[k][0]}</b><p style="margin:4px 0 0">${MSG[k][1]}</p>`; }
+$$(".msg pre span").forEach(s => s.addEventListener("click", () => msgSel(s.dataset.m)));
+
+/* =================== STATUS =================== */
+const FAM = [
+  { f: "2xx", n: "Deu certo!", c: "var(--ok)", codes: [[200, "OK", "Pedido atendido. Resposta normal de GET, PUT e às vezes DELETE."], [201, "Created", "Recurso criado. A resposta típica de um POST."], [204, "No Content", "Deu certo e não há corpo para devolver. Comum em DELETE e no preflight."]] },
+  { f: "3xx", n: "Foi para outro lugar", c: "var(--c-nav)", codes: [[301, "Moved Permanently", "O recurso mudou de endereço para sempre. O navegador segue o novo endereço sozinho."], [304, "Not Modified", "Você já tem a versão mais nova em cache; o servidor nem manda o corpo de novo."]] },
+  { f: "4xx", n: "Erro do cliente", c: "var(--warn)", codes: [[400, "Bad Request", "O pedido veio mal formado: JSON quebrado, campo faltando. Confira o Payload."], [401, "Unauthorized", "Precisa se identificar (login, token)."], [403, "Forbidden", "Você se identificou, mas não tem permissão."], [404, "Not Found", "O recurso não existe. Confira a URL: id, barra, letra errada."]] },
+  { f: "5xx", n: "Erro do servidor", c: "var(--err)", codes: [[500, "Internal Server Error", "Algo quebrou do lado do servidor. Não é culpa do seu fetch."], [503, "Service Unavailable", "Servidor fora do ar ou sobrecarregado. Tente de novo mais tarde."]] }
+];
+$("#fams").innerHTML = FAM.map((f, i) => `<div class="fam" style="--fc:${f.c}"><h3>${f.f}</h3><p>${f.n}</p><div class="codes">${f.codes.map(([c]) => `<button data-c="${c}" data-f="${i}">${c}</button>`).join("")}</div></div>`).join("");
+function codeSel(c) {
+  let it, fam; FAM.forEach(f => f.codes.forEach(x => { if (x[0] === c) { it = x; fam = f; } }));
+  $$("#fams .codes button").forEach(b => b.classList.toggle("on", +b.dataset.c === c));
+  const ok = c >= 200 && c < 300;
+  $("#codex").innerHTML = `<h3 style="color:${fam.c}">${c} ${it[1]}</h3><p style="margin:6px 0 0">${it[2]}</p><span class="okpill" style="background:${ok ? "var(--ok-soft)" : "var(--err-soft)"};color:${ok ? "var(--ok)" : "var(--err)"}">resposta.ok === ${ok}</span>${!ok ? ` <span class="muted" style="font-size:13.5px">· e mesmo assim o fetch <b>não</b> cai no catch sozinho</span>` : ""}`;
+}
+$("#fams").addEventListener("click", e => { const b = e.target.closest("button[data-c]"); if (b) codeSel(+b.dataset.c); });
+
+/* =================== JSON =================== */
+function show(out, txt, err) { out.textContent = txt; out.classList.toggle("err", !!err); }
+let lastObj = null;
+$("#jParse").addEventListener("click", () => {
+  try { lastObj = JSON.parse($("#jsonIn").value); show($("#jOut"), `typeof → "${typeof lastObj}"${Array.isArray(lastObj) ? " (array)" : ""}\n\n` + inspect(lastObj) + (lastObj && lastObj.nome ? `\n\nAgora dá para usar: obj.nome → "${lastObj.nome}"` : "")); }
+  catch (e) { show($("#jOut"), `SyntaxError: ${e.message}\n\nDica: chaves e textos com aspas duplas, sem vírgula sobrando no fim.`, true); }
+});
+$("#jStr").addEventListener("click", () => {
+  try { const o = lastObj || JSON.parse($("#jsonIn").value); const s = JSON.stringify(o); show($("#jOut"), `typeof → "string"\n\n${s}\n\nÉ esse texto que vai no body do fetch.`); }
+  catch (e) { show($("#jOut"), "Primeiro corrija o JSON (JSON.parse falhou): " + e.message, true); }
+});
+$("#jBad").addEventListener("click", () => { $("#jsonIn").value = "{\n  'nome': 'Ana',\n  \"ativo\": true,\n}"; lastObj = null; show($("#jOut"), "Carreguei um JSON com 2 erros. Clique em JSON.parse para ver a mensagem."); });
+$("#jsonIn").addEventListener("input", () => lastObj = null);
+function inspect(o, ind = "") {
+  if (Array.isArray(o)) return "[" + o.map(x => inspect(x, ind)).join(", ") + "]";
+  if (o && typeof o === "object") return "{\n" + Object.entries(o).map(([k, v]) => `${ind}  ${k}: ${inspect(v, ind + "  ")}`).join(",\n") + `\n${ind}}`;
+  return typeof o === "string" ? `"${o}"` : String(o);
+}
+
+/* =================== LOCAL STORAGE =================== */
+const LS_CODE = [
+  `// salvar (objeto → texto)`,
+  `localStorage.setItem("usuarios", JSON.stringify(usuarios));`, ``,
+  `// ler (texto → objeto)`,
+  `const salvos = JSON.parse(localStorage.getItem("usuarios")) || [];`, ``,
+  `// apagar`,
+  `localStorage.removeItem("usuarios");`
+];
+function lsCode(on) { $("#lsCode").innerHTML = LS_CODE.map((l, n) => `<div class="cl${on.includes(n + 1) ? " on" : ""}"><span class="g">${n + 1}</span><span class="c">${hl(l) || " "}</span></div>`).join(""); }
+lsCode([]);
+const LS_USERS = [{ name: "Lisiane", email: "lisiane@email.com" }, { name: "Ana", email: "ana@email.com" }];
+function ls(fn) { try { return fn(); } catch (e) { show($("#lsOut"), "O armazenamento está bloqueado nesta visualização (janela anônima ou dados bloqueados). No seu navegador, funciona normalmente.", true); return undefined; } }
+$("#lsSave").addEventListener("click", () => { lsCode([2]); ls(() => { localStorage.setItem("usuarios", JSON.stringify(LS_USERS)); show($("#lsOut"), `Salvo! O valor guardado é TEXTO:\n${localStorage.getItem("usuarios")}`); }); });
+$("#lsRead").addEventListener("click", () => { lsCode([5]); ls(() => { const raw = localStorage.getItem("usuarios"); const salvos = JSON.parse(raw) || []; show($("#lsOut"), raw ? `getItem devolveu texto; JSON.parse virou array com ${salvos.length} objetos:\n` + salvos.map(u => `• ${u.name} — ${u.email}`).join("\n") : `getItem devolveu null (gaveta vazia). Com o "|| []", salvos vira [] e o código não quebra.`); }); });
+$("#lsDel").addEventListener("click", () => { lsCode([8]); ls(() => { localStorage.removeItem("usuarios"); show($("#lsOut"), "Apagado. Recarregue o Application › Local Storage: a chave sumiu."); }); });
+ls(() => { if (localStorage.getItem("usuarios")) show($("#lsOut"), "A chave usuarios já tem dados de uma visita anterior. Clique em Ler."); });
+
+/* =================== INÍCIO =================== */
+load("async");
+urlSel(0); msgSel("start"); codeSel(404);
+</script>
+</body>
+</html>

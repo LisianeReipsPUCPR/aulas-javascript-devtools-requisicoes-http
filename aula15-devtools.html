@@ -1,0 +1,1368 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevTools na Prática</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: laboratório — navegador simulado + DevTools encaixado embaixo, com o "quadro da professora" (explicações) fixo ao lado */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f5f7fa; --ink:#151a24; --muted:#586174; --line:#d8dde6;
+  --accent:#1a6fe0; --accent-ink:#ffffff; --accent-soft:#e2ecfc;
+  --warn:#9a5c00; --warn-soft:#fff2d6; --err:#c42b2b; --err-soft:#fde7e7; --ok:#18794a; --ok-soft:#e0f3e8;
+  --t-str:#a33a1a; --t-kw:#8a2bb8; --t-num:#1c55c9; --t-com:#6b7585; --t-fn:#0e6a78; --t-tag:#881280; --t-attr:#994500; --t-val:#1a1aa6;
+  --dt-bg:#ffffff; --dt-bar:#f1f3f4; --dt-line:#cfd4da; --dt-sel:#cfe1fb; --dt-hover:#eef3fb; --dt-exec:#fff6c9; --dt-exec-line:#e2c100;
+  --hl-overlay:rgba(26,111,224,.22);
+  --font-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1218; --surface:#181c24; --surface-2:#1e232d; --ink:#e6e9ef; --muted:#9aa3b4; --line:#2b313d;
+  --accent:#7eaaff; --accent-ink:#0f1218; --accent-soft:#1c2943;
+  --warn:#f2b84f; --warn-soft:#382a11; --err:#ff7f7f; --err-soft:#3a1b1d; --ok:#5fd398; --ok-soft:#14321f;
+  --t-str:#f59e7c; --t-kw:#d6a0ff; --t-num:#8cb6ff; --t-com:#7f8899; --t-fn:#5fd0dc; --t-tag:#e08fd8; --t-attr:#f0b070; --t-val:#9db8ff;
+  --dt-bg:#202124; --dt-bar:#2a2b2e; --dt-line:#3d4044; --dt-sel:#26395a; --dt-hover:#2b2f36; --dt-exec:#3b3613; --dt-exec-line:#d9b800;
+  --hl-overlay:rgba(126,170,255,.25); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1218; --surface:#181c24; --surface-2:#1e232d; --ink:#e6e9ef; --muted:#9aa3b4; --line:#2b313d;
+  --accent:#7eaaff; --accent-ink:#0f1218; --accent-soft:#1c2943;
+  --warn:#f2b84f; --warn-soft:#382a11; --err:#ff7f7f; --err-soft:#3a1b1d; --ok:#5fd398; --ok-soft:#14321f;
+  --t-str:#f59e7c; --t-kw:#d6a0ff; --t-num:#8cb6ff; --t-com:#7f8899; --t-fn:#5fd0dc; --t-tag:#e08fd8; --t-attr:#f0b070; --t-val:#9db8ff;
+  --dt-bg:#202124; --dt-bar:#2a2b2e; --dt-line:#3d4044; --dt-sel:#26395a; --dt-hover:#2b2f36; --dt-exec:#3b3613; --dt-exec-line:#d9b800;
+  --hl-overlay:rgba(126,170,255,.25); color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:0 64px}
+.wrap{max-width:1320px; margin:0 auto}
+h1,h2,h3{font-family:var(--font-display); text-wrap:balance; line-height:1.15; margin:0}
+code,kbd,.mono{font-family:var(--font-mono)}
+kbd{font-size:.82em; padding:1px 6px; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; background:var(--surface-2); white-space:nowrap}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
+
+/* ---------- cabeçalho ---------- */
+.top{display:flex; flex-wrap:wrap; gap:12px 32px; align-items:flex-end; justify-content:space-between; padding-block:28px 20px}
+.eyebrow{font:600 12px/1 var(--font-body); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.top h1{font-size:clamp(30px, 4.4vw, 52px); font-weight:800; letter-spacing:-.02em; margin-top:8px}
+.top h1 em{font-style:normal; color:var(--accent)}
+.top p{margin:8px 0 0; color:var(--muted); max-width:62ch}
+.trail{display:flex; flex-wrap:wrap; gap:6px; list-style:none; margin:0; padding:0}
+.trail li{font-size:12.5px; padding:5px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted)}
+.trail li b{color:var(--ink); font-weight:600}
+
+/* ---------- laboratório ---------- */
+.lab{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:18px; align-items:start}
+@media (max-width:1040px){ .lab{grid-template-columns:minmax(0,1fr)} }
+.stage{min-width:0; display:flex; flex-direction:column; gap:0; border:1px solid var(--dt-line); border-radius:var(--r); overflow:hidden; background:var(--dt-bg); box-shadow:0 1px 0 var(--line), 0 12px 30px -18px rgba(20,30,50,.35)}
+
+/* navegador */
+.browser-bar{display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line)}
+.dots{display:flex; gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:var(--dt-line)}
+.url{flex:1; min-width:0; font:12.5px var(--font-mono); color:var(--muted); background:var(--dt-bg); border:1px solid var(--dt-line); border-radius:999px; padding:4px 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.viewport{position:relative; background:#e9ecf1; padding:14px; display:flex; justify-content:center}
+.mockpage{position:relative; width:100%; max-width:820px; background:#ffffff; color:#222222; border-radius:4px; min-height:236px; transition:max-width .3s}
+.viewport.mobile .mockpage{max-width:360px}
+.mockpage input{font:inherit; color:#222222; background:#ffffff}
+.mockpage button{font:inherit}
+.overlay{position:absolute; pointer-events:none; background:var(--hl-overlay); outline:1px solid var(--accent); display:none; z-index:3}
+.overlay span{position:absolute; left:0; top:-22px; font:11px var(--font-mono); background:#1f2a44; color:#ffffff; padding:2px 6px; border-radius:3px; white-space:nowrap}
+.mockpage.inspecting, .mockpage.inspecting *{cursor:crosshair!important}
+.paused-banner{position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; align-items:center; gap:8px; background:#fff7c2; color:#3a3000; border:1px solid #d8c24a; border-radius:4px; padding:5px 8px 5px 12px; font:12.5px var(--font-body); box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.paused-banner button{border:1px solid #c9b23a; background:#ffffff; color:#3a3000; border-radius:3px; padding:1px 8px; cursor:pointer}
+.frozen{position:absolute; inset:0; background:rgba(0,0,0,.06); z-index:4}
+
+/* devtools */
+.dt{border-top:3px solid var(--dt-line); font-family:var(--font-body); font-size:12.5px; color:var(--ink); background:var(--dt-bg)}
+.dt-head{display:flex; align-items:stretch; background:var(--dt-bar); border-bottom:1px solid var(--dt-line)}
+.dt-tools{display:flex; border-right:1px solid var(--dt-line)}
+.ibtn{display:grid; place-items:center; width:34px; height:32px; border:0; background:transparent; cursor:pointer; color:var(--muted)}
+.ibtn:hover{background:var(--dt-hover); color:var(--ink)}
+.ibtn[aria-pressed="true"]{color:var(--accent)}
+.ibtn svg{width:16px; height:16px}
+.dt-tabs{display:flex; overflow-x:auto; scrollbar-width:thin; flex:1; min-width:0}
+.dt-tab{border:0; background:transparent; padding:0 12px; height:32px; cursor:pointer; white-space:nowrap; color:var(--muted); border-bottom:2px solid transparent}
+.dt-tab:hover{background:var(--dt-hover); color:var(--ink)}
+.dt-tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); background:var(--dt-bg)}
+.dt-panel{height:390px; display:flex; min-height:0}
+@media (max-width:720px){ .dt-panel{height:auto; flex-direction:column} }
+.pane{min-width:0; overflow:auto}
+.pane-title{position:sticky; top:0; z-index:1; font-size:11.5px; font-weight:600; color:var(--muted); padding:5px 10px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); display:flex; align-items:center; gap:8px; justify-content:space-between}
+.split{border-left:1px solid var(--dt-line)}
+@media (max-width:720px){ .split{border-left:0; border-top:1px solid var(--dt-line)} }
+[data-ex]{cursor:pointer}
+.hot{animation:hot 1.4s ease-out 2}
+@keyframes hot{0%{box-shadow:0 0 0 0 var(--accent)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+/* elements */
+.dom{font:12.5px/1.75 var(--font-mono); padding:6px 0; white-space:nowrap}
+.dom .row{padding:0 10px; cursor:pointer}
+.dom .row:hover{background:var(--dt-hover)}
+.dom .row.sel{background:var(--dt-sel)}
+.tg{color:var(--t-tag)} .at{color:var(--t-attr)} .av{color:var(--t-val)} .tx{color:var(--ink)}
+.styles{font:12px/1.7 var(--font-mono); padding:6px 0}
+.rule{padding:4px 10px 8px; border-bottom:1px solid var(--dt-line)}
+.rule .src{float:right; color:var(--muted); text-decoration:underline; text-decoration-color:var(--dt-line)}
+.rule .sel-n{color:var(--ink); font-weight:700}
+.prop{display:flex; gap:6px; align-items:center; padding-left:10px}
+.prop input{margin:0; width:12px; height:12px}
+.prop .pn{color:var(--t-kw)} .prop .pv{color:var(--ink); outline:none; border-radius:2px; padding:0 2px}
+.prop .pv:focus{background:var(--surface-2); box-shadow:0 0 0 1px var(--accent)}
+.prop.off .pn,.prop.off .pv{text-decoration:line-through; opacity:.55}
+.swatch{display:inline-block; width:10px; height:10px; border:1px solid var(--dt-line); vertical-align:-1px; margin-right:3px}
+.boxm{margin:12px 10px; font:11px var(--font-mono); text-align:center}
+.boxm div{border:1px dashed currentColor; padding:4px 10px; position:relative}
+.boxm .bm-m{background:#f9cc9d33; color:#c27c2c} .boxm .bm-b{background:#fbdd9d40; color:#9a7c00; border-style:solid}
+.boxm .bm-p{background:#c3d08b40; color:#5d7a1c} .boxm .bm-c{background:#8cb6c040; color:#2a6a7a; padding:6px}
+.boxm small{position:absolute; left:4px; top:1px; font-size:9.5px; opacity:.85}
+
+/* console */
+.con{flex:1; display:flex; flex-direction:column; min-width:0}
+.con-bar{display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:4px 8px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line)}
+.chip{border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:999px; padding:1px 9px; font-size:11.5px; cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--ink)}
+.con-out{flex:1; overflow:auto; font:12.5px/1.6 var(--font-mono); min-height:140px}
+.ln{display:flex; gap:8px; padding:3px 10px; border-bottom:1px solid var(--dt-line); white-space:pre-wrap; word-break:break-word}
+.ln .ic{flex:none; width:14px; text-align:center}
+.ln .bd{flex:1; min-width:0}
+.ln .lk{flex:none; color:var(--muted); text-decoration:underline; cursor:pointer}
+.ln.warn{background:var(--warn-soft); color:var(--warn)} .ln.error{background:var(--err-soft); color:var(--err)}
+.ln.in{color:var(--muted)} .ln.in .bd{color:var(--ink)}
+.ln.out .bd{color:var(--ink)} .ln.info .bd{color:var(--ink)}
+.v-str{color:var(--t-str)} .v-num{color:var(--t-num)} .v-und{color:var(--muted)} .v-key{color:var(--t-kw)}
+.con-in{display:flex; align-items:center; gap:6px; padding:4px 10px; border-top:1px solid var(--dt-line)}
+.con-in span{color:var(--accent); font:700 13px var(--font-mono)}
+.con-in input{flex:1; min-width:0; border:0; background:transparent; font:12.5px var(--font-mono); color:var(--ink); padding:6px 0; outline:none}
+.ctable{border-collapse:collapse; margin:4px 0; font-size:12px}
+.ctable th,.ctable td{border:1px solid var(--dt-line); padding:2px 10px; text-align:left}
+.ctable th{background:var(--dt-bar); font-weight:600}
+.examples{width:240px; flex:none; padding:8px; display:flex; flex-direction:column; gap:6px}
+@media (max-width:720px){ .examples{width:auto} }
+.ex-btn{text-align:left; border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:6px; padding:6px 8px; cursor:pointer; font:11.5px/1.4 var(--font-mono)}
+.ex-btn:hover{border-color:var(--accent)}
+.ex-btn b{display:block; font:600 11.5px var(--font-body); color:var(--muted); margin-bottom:2px}
+
+/* sources */
+.nav{width:180px; flex:none}
+@media (max-width:720px){ .nav{width:auto; max-height:150px} }
+.navtabs{display:flex; border-bottom:1px solid var(--dt-line)}
+.navtabs button{flex:1; border:0; background:transparent; padding:5px; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; font-size:12px}
+.navtabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent)}
+.tree{list-style:none; margin:0; padding:6px 0; font-size:12.5px}
+.tree li{padding:2px 10px 2px calc(10px + var(--d,0)*14px); cursor:pointer; white-space:nowrap}
+.tree li:hover{background:var(--dt-hover)} .tree li.sel{background:var(--dt-sel)}
+.tree .fi{display:inline-block; width:14px; text-align:center; margin-right:4px; color:var(--muted)}
+.editor{flex:1; min-width:0; display:flex; flex-direction:column}
+.ed-tabs{display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line); padding-right:6px}
+.ed-tab{padding:6px 12px; background:var(--dt-bg); border-right:1px solid var(--dt-line); font-size:12px}
+.fix{border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:11.5px}
+.fix:hover{border-color:var(--accent)}
+.code{flex:1; overflow:auto; font:12.5px/1.7 var(--font-mono); padding:4px 0}
+.cl{display:flex; white-space:pre; min-width:max-content}
+.cl .g{flex:none; width:44px; text-align:right; padding-right:10px; color:var(--muted); cursor:pointer; user-select:none; position:relative; z-index:0}
+.cl .g:hover{color:var(--ink)}
+.cl.bp .g{color:#ffffff; font-weight:700}
+.cl.bp .g::before{content:""; position:absolute; inset:1px 2px 1px 6px; background:#2f73e0; clip-path:polygon(0 0, 78% 0, 100% 50%, 78% 100%, 0 100%); z-index:-1}
+.cl.bp.bp-off .g::before{background:#8fb0e6}
+.cl .c{padding-left:8px; padding-right:24px}
+.cl.exec{background:var(--dt-exec); box-shadow:inset 3px 0 0 var(--dt-exec-line)}
+.cl.frame{background:var(--dt-hover)}
+.cl .iv{margin-left:18px; font-size:11.5px; color:var(--t-fn); background:var(--accent-soft); border-radius:3px; padding:0 6px}
+.cl .iv.str{color:var(--t-str)}
+.t-str{color:var(--t-str)} .t-kw{color:var(--t-kw)} .t-num{color:var(--t-num)} .t-com{color:var(--t-com); font-style:italic} .t-fn{color:var(--t-fn)}
+.dbg{width:290px; flex:none; display:flex; flex-direction:column}
+@media (max-width:720px){ .dbg{width:auto} }
+.dbg-tools{display:flex; flex-wrap:wrap; align-items:center; gap:2px; padding:3px 6px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line)}
+.dbg-tools .ibtn{width:30px; height:28px}
+.dbg-tools .ibtn:disabled{opacity:.35; cursor:not-allowed}
+.status{padding:6px 10px; font-size:12px; border-bottom:1px solid var(--dt-line)}
+.status.paused{background:var(--dt-exec); color:var(--ink); font-weight:600}
+details.sec{border-bottom:1px solid var(--dt-line)}
+details.sec > summary{list-style:none; padding:5px 10px; font-weight:600; font-size:12px; cursor:pointer; background:var(--dt-bar); display:flex; align-items:center; gap:6px}
+details.sec > summary::before{content:"▸"; color:var(--muted); font-size:10px; transition:transform .15s}
+details.sec[open] > summary::before{transform:rotate(90deg)}
+details.sec > summary::-webkit-details-marker{display:none}
+.sec-body{padding:4px 10px 8px; font:12px/1.65 var(--font-mono)}
+.muted{color:var(--muted)}
+.kv{display:flex; gap:6px; white-space:nowrap}
+.kv .k{color:var(--t-kw)}
+.kv.changed{animation:flash 1.2s ease-out}
+@keyframes flash{0%{background:var(--warn-soft)}100%{background:transparent}}
+.frame-row{display:flex; justify-content:space-between; gap:8px; padding:1px 4px; cursor:pointer; border-radius:3px}
+.frame-row:hover{background:var(--dt-hover)}
+.frame-row.top{background:var(--dt-sel)}
+.frame-row .muted{text-decoration:underline}
+.watch-add{display:flex; gap:4px; margin-top:4px}
+.watch-add input{flex:1; min-width:0; font:12px var(--font-mono); border:1px solid var(--dt-line); background:var(--dt-bg); color:var(--ink); border-radius:3px; padding:2px 6px}
+.watch-add button{border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:3px; cursor:pointer; padding:0 8px}
+.xbtn{border:0; background:transparent; cursor:pointer; color:var(--muted); padding:0 4px}
+.cat{padding-left:4px}
+.cat summary{cursor:pointer; font-family:var(--font-body)}
+.cat label{display:flex; gap:6px; align-items:center; padding-left:18px; font-family:var(--font-body)}
+
+/* network */
+.net{flex:1; min-width:0; display:flex; flex-direction:column}
+.net-tools{display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:4px 8px; background:var(--dt-bar); border-bottom:1px solid var(--dt-line)}
+.net-tools label{display:flex; gap:4px; align-items:center; cursor:pointer}
+.net-tools select{font:inherit; font-size:12px; background:var(--dt-bg); color:var(--ink); border:1px solid var(--dt-line); border-radius:3px}
+.tbl-wrap{flex:1; overflow:auto}
+table.grid{border-collapse:collapse; width:100%; font-size:12px; font-variant-numeric:tabular-nums}
+table.grid th{position:sticky; top:0; background:var(--dt-bar); text-align:left; font-weight:600; padding:4px 8px; border-bottom:1px solid var(--dt-line); border-right:1px solid var(--dt-line); white-space:nowrap}
+table.grid td{padding:4px 8px; border-bottom:1px solid var(--dt-line); border-right:1px solid var(--dt-line); white-space:nowrap}
+table.grid tbody tr{cursor:pointer}
+table.grid tbody tr:hover{background:var(--dt-hover)}
+table.grid tbody tr.sel{background:var(--dt-sel)}
+table.grid tr.fail td{color:var(--err)}
+.wf{position:relative; height:10px; min-width:120px}
+.wf i{position:absolute; top:1px; height:8px; border-radius:2px; background:#3c8cff}
+.wf i.w{background:#22a06b}
+.netdet{width:300px; flex:none; padding:8px 10px; font-size:12px}
+@media (max-width:720px){ .netdet{width:auto} }
+.netdet dl{display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:6px 0 0; font-family:var(--font-mono); font-size:11.5px}
+.netdet dt{color:var(--muted)} .netdet dd{margin:0; word-break:break-all}
+
+/* application / outros */
+.side{width:190px; flex:none; font-size:12.5px}
+@media (max-width:720px){ .side{width:auto} }
+.side h4{margin:8px 10px 2px; font:600 11px var(--font-body); text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+.side .tree li{--d:1}
+.panelpad{padding:14px; display:flex; flex-direction:column; gap:12px; flex:1; min-width:0; overflow:auto}
+.btn{border:1px solid var(--dt-line); background:var(--dt-bg); border-radius:4px; padding:4px 12px; cursor:pointer; font-size:12.5px}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+.flame{position:relative; height:120px; border:1px solid var(--dt-line); border-radius:4px; background:var(--surface-2); overflow:hidden}
+.flame i{position:absolute; height:16px; border-radius:2px; font:10px/16px var(--font-mono); color:#1a1a1a; padding-left:4px; overflow:hidden; white-space:nowrap}
+.legend{display:flex; flex-wrap:wrap; gap:12px; font-size:12px}
+.legend span::before{content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; background:var(--c); vertical-align:-1px}
+.scores{display:flex; flex-wrap:wrap; gap:18px}
+.score{display:flex; flex-direction:column; align-items:center; gap:6px; width:96px; text-align:center; font-size:12px}
+.ring{width:64px; height:64px; border-radius:50%; display:grid; place-items:center; font:700 18px var(--font-mono); background:conic-gradient(var(--c) calc(var(--v)*1%), var(--dt-line) 0); position:relative}
+.ring::after{content:""; position:absolute; inset:6px; border-radius:50%; background:var(--dt-bg)}
+.ring b{position:relative; z-index:1; color:var(--c)}
+
+/* quadro da professora */
+.board{position:sticky; top:12px; display:flex; flex-direction:column; gap:12px}
+@media (max-width:1040px){ .board{position:static} }
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px 18px}
+.expl .tag{display:inline-block; font:600 11px var(--font-body); letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:6px}
+.expl h3{font-size:21px; font-weight:700; margin-bottom:8px}
+.expl .body{font-size:14.5px}
+.expl .body p{margin:0 0 10px}
+.expl .body ul{margin:0 0 10px; padding-left:18px}
+.expl .body li{margin-bottom:4px}
+.expl .body code{font-size:.86em; background:var(--surface-2); border:1px solid var(--line); border-radius:4px; padding:0 4px}
+.tip{border-radius:8px; background:var(--accent-soft); padding:9px 12px; font-size:13.5px; margin-top:6px}
+.tip b{color:var(--accent)}
+.keys{margin-top:8px; font-size:13px; color:var(--muted)}
+.tour{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.tour .btn{font-size:13px}
+.tour span{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.hint{font-size:13px; color:var(--muted); margin:0}
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:8px; font-size:13.5px; z-index:50; box-shadow:0 8px 24px rgba(0,0,0,.25); max-width:calc(100% - 32px)}
+
+/* ---------- seções da aula ---------- */
+section.block{margin-top:56px}
+.sh{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 16px; margin-bottom:18px}
+.sh h2{font-size:clamp(24px, 3vw, 34px); font-weight:800; letter-spacing:-.015em}
+.sh p{margin:0; color:var(--muted); max-width:64ch}
+.grid4{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px}
+@media (max-width:980px){ .grid4{grid-template-columns:repeat(2, minmax(0,1fr))} }
+@media (max-width:520px){ .grid4{grid-template-columns:minmax(0,1fr)} }
+.err-card{display:flex; flex-direction:column; gap:8px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+.err-card h3{font-size:18px; font-family:var(--font-mono); font-weight:700}
+.err-card p{margin:0; font-size:14px; color:var(--muted); flex:1}
+.err-card pre{margin:0; font:12.5px var(--font-mono); background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:8px 10px; overflow-x:auto}
+.err-card .btn{align-self:flex-start; font-size:12.5px}
+.err-card.logic h3{color:var(--warn)}
+.err-card:not(.logic) h3{color:var(--err)}
+
+.anatomy{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px}
+.errline{font:14px/1.9 var(--font-mono); background:var(--err-soft); color:var(--err); border-radius:6px; padding:10px 14px; overflow-x:auto; white-space:nowrap}
+.errline span{border-bottom:2px solid transparent; cursor:pointer; padding:2px 0; border-radius:2px}
+.errline span.on{background:var(--surface); border-bottom-color:currentColor}
+.parts{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin-top:14px}
+@media (max-width:640px){ .parts{grid-template-columns:minmax(0,1fr)} }
+.part{border:1px solid var(--line); border-radius:8px; padding:12px 14px; cursor:pointer; background:var(--surface)}
+.part.on{border-color:var(--accent); background:var(--accent-soft)}
+.part b{display:block; font:700 12px var(--font-body); letter-spacing:.1em; color:var(--accent)}
+.part code{display:block; font-size:13px; margin:4px 0}
+.part span{font-size:13.5px; color:var(--muted)}
+
+.ctrl{width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.ctrl-wrap{overflow-x:auto}
+.ctrl th,.ctrl td{padding:11px 14px; text-align:left; border-bottom:1px solid var(--line); font-size:14px; vertical-align:middle}
+.ctrl th{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:600}
+.ctrl td:first-child{font-weight:600; white-space:nowrap}
+.ctrl tr:last-child td{border-bottom:0}
+.ctrl svg{width:16px; height:16px; vertical-align:-3px; margin-right:6px; color:var(--accent)}
+
+.steps{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px; counter-reset:s}
+.steps li{counter-increment:s; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; font-size:14px}
+.steps li::before{content:counter(s); display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--accent); color:var(--accent-ink); font:700 13px var(--font-mono); margin-bottom:8px}
+.steps b{display:block; font-family:var(--font-display); font-size:16px; margin-bottom:2px}
+.steps span{color:var(--muted)}
+
+.cuidado{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px}
+@media (max-width:640px){ .cuidado{grid-template-columns:minmax(0,1fr)} }
+.cuidado div{border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; background:var(--surface)}
+.cuidado b{display:block; font-family:var(--font-display); font-size:17px; margin-bottom:4px}
+.cuidado span{font-size:14px; color:var(--muted)}
+
+.prac{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px}
+@media (max-width:980px){ .prac{grid-template-columns:minmax(0,1fr)} }
+.ex{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; display:flex; flex-direction:column; gap:10px; min-width:0}
+.ex h3{font-size:18px}
+.ex p{margin:0; font-size:14px; color:var(--muted)}
+.ex pre{margin:0; font:12.5px/1.6 var(--font-mono); background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; overflow-x:auto}
+.ex details{border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:14px}
+.ex details summary{cursor:pointer; font-weight:600}
+.ex details ul{margin:6px 0 2px; padding-left:18px}
+.ex details li{margin-bottom:4px}
+.ex .bugcount{font:600 12px var(--font-body); color:var(--err); background:var(--err-soft); border-radius:999px; padding:2px 10px; align-self:flex-start}
+.ex code{font-size:.88em}
+
+.keys-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px}
+.keys-grid div{display:flex; flex-direction:column; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:14px}
+.keys-grid small{color:var(--muted)}
+.trivia{display:flex; gap:16px; align-items:flex-start; background:var(--surface); border:1px dashed var(--line); border-radius:var(--r); padding:16px 18px; font-size:14.5px}
+.trivia b{font-family:var(--font-display)}
+.foot{margin-top:48px; color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:8px 24px}
+.foot a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">JavaScript · Aula 15 · Debugging · Profa. Lisiane Reips</div>
+      <h1>Hoje viramos <em>detetives de bugs</em></h1>
+      <p>Um DevTools de mentira, mas que funciona de verdade. Clique em qualquer parte dele para ver a explicação ao lado, ou siga o tour guiado. O bug da vez é o mesmo da demo oficial do Chrome: <b>5 + 1 = 51</b>.</p>
+    </div>
+    <ul class="trail" aria-label="Trilha da aula">
+      <li><b>1</b> O que é bug</li><li><b>2</b> Tipos de erro</li><li><b>3</b> Console</li><li><b>4</b> debugger</li><li><b>5</b> DevTools passo a passo</li><li><b>6</b> Praticar</li>
+    </ul>
+  </header>
+
+  <div class="lab">
+    <div class="stage" id="stage">
+      <div class="browser-bar" data-ex="mockpage">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="url">googlechrome.github.io/devtools-samples/debug-js/get-started <span class="muted">(simulado)</span></div>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="mockpage" id="m-body">
+          <h1 id="m-h1">Demo: Primeiros passos no debug de JavaScript</h1>
+          <label id="m-l1" for="m-in1">Número 1</label>
+          <input id="m-in1" value="5" inputmode="numeric" aria-label="Número 1">
+          <label id="m-l2" for="m-in2">Número 2</label>
+          <input id="m-in2" value="1" inputmode="numeric" aria-label="Número 2">
+          <div><button id="m-btn" type="button">Somar Número 1 e Número 2</button></div>
+          <p id="m-p"></p>
+          <div class="overlay" id="overlay"><span></span></div>
+        </div>
+      </div>
+
+      <div class="dt" id="dt">
+        <div class="dt-head">
+          <div class="dt-tools">
+            <button class="ibtn" id="inspectBtn" aria-pressed="false" title="Selecionar um elemento da página (Ctrl+Shift+C)" data-ex="inspect">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/><path d="M8 7l6 2.5-2.6 1 2.2 2.2-1 1-2.2-2.2-1 2.6z" fill="currentColor"/></svg>
+            </button>
+            <button class="ibtn" id="deviceBtn" aria-pressed="false" title="Modo dispositivo (Ctrl+Shift+M)" data-ex="device">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg>
+            </button>
+          </div>
+          <div class="dt-tabs" role="tablist" id="dtTabs">
+            <button class="dt-tab" role="tab" data-tab="elements" aria-selected="false">Elements</button>
+            <button class="dt-tab" role="tab" data-tab="console" aria-selected="false">Console</button>
+            <button class="dt-tab" role="tab" data-tab="sources" aria-selected="true">Sources</button>
+            <button class="dt-tab" role="tab" data-tab="network" aria-selected="false">Network</button>
+            <button class="dt-tab" role="tab" data-tab="application" aria-selected="false">Application</button>
+            <button class="dt-tab" role="tab" data-tab="performance" aria-selected="false">Performance</button>
+            <button class="dt-tab" role="tab" data-tab="memory" aria-selected="false">Memory</button>
+            <button class="dt-tab" role="tab" data-tab="lighthouse" aria-selected="false">Lighthouse</button>
+          </div>
+        </div>
+
+        <!-- ELEMENTS -->
+        <div class="dt-panel" data-panel="elements" hidden>
+          <div class="pane" style="flex:1">
+            <div class="pane-title" data-ex="dom-node">DOM <span>passe o mouse · clique para selecionar</span></div>
+            <div class="dom" id="dom"></div>
+          </div>
+          <div class="pane split" style="width:min(320px,100%); flex:none">
+            <div class="pane-title" data-ex="styles">Styles <span>clique no valor para editar</span></div>
+            <div class="styles" id="styles"></div>
+            <div class="pane-title" data-ex="boxmodel">Box model (Computed)</div>
+            <div id="boxm"></div>
+          </div>
+        </div>
+
+        <!-- CONSOLE -->
+        <div class="dt-panel" data-panel="console" hidden>
+          <div class="con">
+            <div class="con-bar">
+              <button class="ibtn" id="conClear" title="Limpar console (Ctrl+L)" data-ex="console-clear" style="width:26px;height:24px">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><path d="M4.2 11.8l7.6-7.6"/></svg>
+              </button>
+              <span data-ex="console-levels" style="display:flex;gap:4px;flex-wrap:wrap" id="conFilters">
+                <button class="chip" data-lvl="all" aria-pressed="true">Todos</button>
+                <button class="chip" data-lvl="error" aria-pressed="false">Erros <b id="cErr">0</b></button>
+                <button class="chip" data-lvl="warn" aria-pressed="false">Avisos <b id="cWarn">0</b></button>
+                <button class="chip" data-lvl="log" aria-pressed="false">Logs</button>
+              </span>
+            </div>
+            <div class="con-out" id="conOut" aria-live="polite"></div>
+            <div class="con-in" data-ex="console-input"><span>›</span><input id="conIn" spellcheck="false" autocomplete="off" placeholder='digite JavaScript e aperte Enter — ex.: getNumber1() + getNumber2()' aria-label="Entrada do console"></div>
+          </div>
+          <div class="pane split examples" data-ex="console-methods">
+            <div class="muted" style="font-size:11.5px;font-weight:600">EXEMPLOS DOS SLIDES · clique para rodar</div>
+            <div id="conExamples" style="display:flex;flex-direction:column;gap:6px"></div>
+          </div>
+        </div>
+
+        <!-- SOURCES -->
+        <div class="dt-panel" data-panel="sources">
+          <div class="pane nav" data-ex="file-tree">
+            <div class="navtabs" role="tablist">
+              <button id="navPage" aria-selected="true">Page</button>
+              <button id="navSnip" aria-selected="false" data-ex="snippets">Snippets</button>
+            </div>
+            <ul class="tree" id="fileTree"></ul>
+          </div>
+          <div class="editor split">
+            <div class="ed-tabs">
+              <span class="ed-tab" id="edTab">get-started.js</span>
+              <button class="fix" id="fixBtn" data-ex="fix">Corrigir linha 31</button>
+            </div>
+            <div class="code" id="code" data-ex-area="code"></div>
+          </div>
+          <div class="pane split dbg">
+            <div class="dbg-tools">
+              <button class="ibtn" id="bResume" title="Resume (F8)" data-ex="btn-resume" disabled><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="2" height="10"/><path d="M7 3l7 5-7 5z"/></svg></button>
+              <button class="ibtn" id="bOver" title="Step over (F10)" data-ex="btn-over" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 9a5.5 5.5 0 0 1 11 0"/><path d="M13.5 5v4h-4"/><circle cx="8" cy="13" r="1.3" fill="currentColor"/></svg></button>
+              <button class="ibtn" id="bInto" title="Step into (F11)" data-ex="btn-into" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5v8"/><path d="M4.5 6.5L8 10l3.5-3.5"/><circle cx="8" cy="13.5" r="1.3" fill="currentColor"/></svg></button>
+              <button class="ibtn" id="bOut" title="Step out (Shift+F11)" data-ex="btn-out" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 10.5v-8"/><path d="M4.5 5.5L8 2l3.5 3.5"/><circle cx="8" cy="13.5" r="1.3" fill="currentColor"/></svg></button>
+              <button class="ibtn" id="bDeact" title="Desativar breakpoints (Ctrl+F8)" data-ex="btn-deact" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h8l3 4-3 4H2z"/><path d="M1.5 14.5l13-13"/></svg></button>
+            </div>
+            <div class="status" id="dbgStatus">Não pausado · clique no botão da página para executar</div>
+            <details class="sec" open data-ex="watch"><summary>Watch</summary><div class="sec-body"><div id="watchList"></div>
+              <form class="watch-add" id="watchForm"><input id="watchIn" placeholder="adicionar expressão" aria-label="Nova expressão de watch"><button>+</button></form></div></details>
+            <details class="sec" open data-ex="bplist"><summary>Breakpoints</summary><div class="sec-body" id="bpList"></div></details>
+            <details class="sec" open data-ex="scope"><summary>Scope</summary><div class="sec-body" id="scope"><span class="muted">Não pausado</span></div></details>
+            <details class="sec" open data-ex="callstack"><summary>Call Stack</summary><div class="sec-body" id="stack"><span class="muted">Não pausado</span></div></details>
+            <details class="sec" data-ex="xhr-bp"><summary>XHR/fetch Breakpoints</summary><div class="sec-body"><label class="kv" style="font-family:var(--font-body)"><input type="checkbox"> Qualquer URL</label></div></details>
+            <details class="sec" data-ex="dom-bp"><summary>DOM Breakpoints</summary><div class="sec-body muted" style="font-family:var(--font-body)">Nenhum. Crie no Elements: botão direito › Break on.</div></details>
+            <details class="sec" open data-ex="event-bp" id="evSec"><summary>Event Listener Breakpoints</summary>
+              <div class="sec-body">
+                <details class="cat"><summary>Animation</summary></details>
+                <details class="cat"><summary>Clipboard</summary></details>
+                <details class="cat"><summary>Keyboard</summary><label><input type="checkbox"> keydown</label><label><input type="checkbox"> keyup</label></details>
+                <details class="cat" id="mouseCat"><summary>Mouse</summary>
+                  <label><input type="checkbox" id="evClick"> click</label>
+                  <label><input type="checkbox"> dblclick</label>
+                  <label><input type="checkbox"> mousedown</label>
+                  <label><input type="checkbox"> mouseover</label>
+                </details>
+                <details class="cat"><summary>Timer</summary></details>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- NETWORK -->
+        <div class="dt-panel" data-panel="network" hidden>
+          <div class="net">
+            <div class="net-tools">
+              <label data-ex="preserve-log"><input type="checkbox"> Preserve log</label>
+              <label data-ex="disable-cache"><input type="checkbox"> Disable cache</label>
+              <select data-ex="throttling" aria-label="Velocidade da rede"><option>Sem limitação</option><option>Fast 4G</option><option>Slow 4G</option><option>Offline</option></select>
+              <span id="netFilters" data-ex="net-filter" style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="chip" data-f="all" aria-pressed="true">All</button><button class="chip" data-f="fetch" aria-pressed="false">Fetch/XHR</button><button class="chip" data-f="doc" aria-pressed="false">Doc</button><button class="chip" data-f="css" aria-pressed="false">CSS</button><button class="chip" data-f="js" aria-pressed="false">JS</button><button class="chip" data-f="img" aria-pressed="false">Img</button>
+              </span>
+            </div>
+            <div class="tbl-wrap"><table class="grid" id="netTable"><thead><tr><th>Name</th><th>Status</th><th>Type</th><th>Size</th><th>Time</th><th>Waterfall</th></tr></thead><tbody></tbody></table></div>
+          </div>
+          <div class="pane split netdet" id="netDet"><span class="muted">Clique numa linha para ver os detalhes da requisição.</span></div>
+        </div>
+
+        <!-- APPLICATION -->
+        <div class="dt-panel" data-panel="application" hidden>
+          <div class="pane side">
+            <h4>Storage</h4>
+            <ul class="tree" id="appTree">
+              <li data-s="local" class="sel" data-ex="storage-local"><span class="fi">▦</span>Local storage</li>
+              <li data-s="session" data-ex="storage-session"><span class="fi">▦</span>Session storage</li>
+              <li data-s="idb" data-ex="storage-idb"><span class="fi">⛁</span>IndexedDB</li>
+              <li data-s="cookies" data-ex="cookies"><span class="fi">◍</span>Cookies</li>
+            </ul>
+            <h4>Background</h4>
+            <ul class="tree"><li data-ex="sw"><span class="fi">⚙</span>Service workers</li><li data-ex="sw"><span class="fi">▤</span>Cache storage</li></ul>
+          </div>
+          <div class="panelpad split" id="appMain"></div>
+        </div>
+
+        <!-- PERFORMANCE -->
+        <div class="dt-panel" data-panel="performance" hidden>
+          <div class="panelpad">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="perfRec" data-ex="perf-record">● Gravar</button><span class="muted" id="perfMsg">Grave, clique no botão da página e pare a gravação.</span></div>
+            <div class="flame" id="flame" data-ex="perf-flame"></div>
+            <div class="legend"><span style="--c:#f3c94b">Scripting (JS)</span><span style="--c:#a68cf0">Rendering (estilo e layout)</span><span style="--c:#6fcf8a">Painting</span><span style="--c:#e05252">Tarefa longa (&gt; 50 ms)</span></div>
+          </div>
+        </div>
+
+        <!-- MEMORY -->
+        <div class="dt-panel" data-panel="memory" hidden>
+          <div class="panelpad">
+            <div style="display:flex;flex-direction:column;gap:4px" data-ex="memory-types">
+              <label><input type="radio" name="mem" checked> Heap snapshot</label>
+              <label><input type="radio" name="mem"> Allocations on timeline</label>
+              <label><input type="radio" name="mem"> Allocation sampling</label>
+            </div>
+            <div><button class="btn primary" id="memSnap">Tirar snapshot</button></div>
+            <div id="memOut"></div>
+          </div>
+        </div>
+
+        <!-- LIGHTHOUSE -->
+        <div class="dt-panel" data-panel="lighthouse" hidden>
+          <div class="panelpad">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="lhRun" data-ex="tab-lighthouse">Analisar a página</button><span class="muted">Modo: Navegação · Dispositivo: Celular</span></div>
+            <div class="scores" id="lhScores"></div>
+            <div id="lhIssues"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="board" aria-label="Explicação">
+      <div class="card expl" id="expl" aria-live="polite">
+        <span class="tag" id="exTag">Comece aqui</span>
+        <h3 id="exTitle"></h3>
+        <div class="body" id="exBody"></div>
+      </div>
+      <div class="card">
+        <div class="tour">
+          <button class="btn" id="tourPrev">← Anterior</button>
+          <span id="tourPos">Tour guiado</span>
+          <button class="btn primary" id="tourNext">Começar tour →</button>
+        </div>
+      </div>
+      <p class="hint">Tudo dentro do DevTools é clicável. Atalhos <kbd>F8</kbd> <kbd>F10</kbd> <kbd>F11</kbd> <kbd>Shift</kbd>+<kbd>F11</kbd> funcionam enquanto o código estiver pausado.</p>
+    </aside>
+  </div>
+
+  <!-- ===================== SEÇÕES ===================== -->
+  <section class="block">
+    <div class="trivia">
+      <div><b>Você sabia?</b> Em 1947, a equipe de Grace Hopper encontrou uma mariposa de verdade presa no computador Harvard Mark II e colou o inseto no caderno de registros. A palavra "bug" já existia, mas a história pegou. Desde então, debugar é tirar os insetos do código.</div>
+    </div>
+  </section>
+
+  <section class="block" id="tipos">
+    <div class="sh"><h2>Tipos de erro</h2><p>Cada um tem um botão que roda o exemplo no Console do simulador lá em cima. Veja a mensagem que aparece.</p></div>
+    <div class="grid4">
+      <div class="err-card"><h3>SyntaxError</h3><p>Escrevemos errado: falta <code>(</code> <code>)</code> ou <code>{</code> <code>}</code>. O código nem chega a rodar.</p><pre>if (x &gt; 3 {</pre><button class="btn" data-run="if (x > 3 {">Testar no Console ↑</button></div>
+      <div class="err-card"><h3>ReferenceError</h3><p>Usamos algo que não existe, quase sempre um nome digitado errado.</p><pre>console.log(nme);</pre><button class="btn" data-run="console.log(nme);">Testar no Console ↑</button></div>
+      <div class="err-card"><h3>TypeError</h3><p>Usamos algo do jeito errado, como ler uma propriedade de <code>null</code>.</p><pre>null.textContent</pre><button class="btn" data-run="null.textContent">Testar no Console ↑</button></div>
+      <div class="err-card logic"><h3>Erro de lógica</h3><p>Roda sem erro, mas o resultado está errado. O mais traiçoeiro: o console não avisa nada.</p><pre>"5" + "1"   // "51"</pre><button class="btn" data-run='"5" + "1"'>Testar no Console ↑</button></div>
+    </div>
+  </section>
+
+  <section class="block" id="lendo">
+    <div class="sh"><h2>Lendo o erro</h2><p>A mensagem de erro é uma pista, não uma bronca. Clique em cada pedaço.</p></div>
+    <div class="anatomy">
+      <div class="errline" id="errline"><span data-p="0">Uncaught TypeError</span>: <span data-p="1">Cannot read properties of null (reading 'addEventListener')</span> at <span data-p="2">script.js:3</span></div>
+      <div class="parts" id="parts">
+        <div class="part" data-p="0"><b>O QUÊ?</b><code>TypeError</code><span>O tipo do erro. Diz a família do problema: aqui, usamos um valor do jeito errado.</span></div>
+        <div class="part" data-p="1"><b>POR QUÊ?</b><code>Cannot read… of null</code><span>Tentamos chamar <code>addEventListener</code> em <code>null</code>: o <code>querySelector</code> não encontrou o elemento (seletor errado ou script rodando antes do HTML existir).</span></div>
+        <div class="part" data-p="2"><b>ONDE?</b><code>script.js:3</code><span>Arquivo e linha. No DevTools esse texto é um link: clique e ele abre o Sources na linha exata.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="controles">
+    <div class="sh"><h2>Controles do debugger</h2><p>Com o código pausado, você é o controle remoto.</p></div>
+    <div class="ctrl-wrap"><table class="ctrl">
+      <thead><tr><th>Botão</th><th>Windows / Linux</th><th>Mac</th><th>O que faz</th></tr></thead>
+      <tbody>
+        <tr><td><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="2" height="10"/><path d="M7 3l7 5-7 5z"/></svg>Resume</td><td><kbd>F8</kbd></td><td><kbd>F8</kbd> ou <kbd>⌘</kbd>+<kbd>\</kbd></td><td>Continua até o próximo breakpoint.</td></tr>
+        <tr><td><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 9a5.5 5.5 0 0 1 11 0"/><path d="M13.5 5v4h-4"/></svg>Step over</td><td><kbd>F10</kbd></td><td><kbd>F10</kbd> ou <kbd>⌘</kbd>+<kbd>'</kbd></td><td>Executa a linha inteira e vai para a próxima. Se a linha chama uma função, ela roda toda sem você entrar.</td></tr>
+        <tr><td><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5v8"/><path d="M4.5 6.5L8 10l3.5-3.5"/></svg>Step into</td><td><kbd>F11</kbd></td><td><kbd>F11</kbd> ou <kbd>⌘</kbd>+<kbd>;</kbd></td><td>Entra dentro da função chamada na linha.</td></tr>
+        <tr><td><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 10.5v-8"/><path d="M4.5 5.5L8 2l3.5 3.5"/></svg>Step out</td><td><kbd>Shift</kbd>+<kbd>F11</kbd></td><td><kbd>Shift</kbd>+<kbd>F11</kbd> ou <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>;</kbd></td><td>Termina a função atual e volta para quem a chamou.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>O método do detetive</h2><p>A ordem importa: sem reproduzir o bug, não dá para saber se você corrigiu.</p></div>
+    <ol class="steps">
+      <li><b>Reproduza</b><span>Descubra os passos exatos que fazem o bug aparecer. Aqui: digitar 5 e 1 e clicar.</span></li>
+      <li><b>Leia o erro</b><span>Tipo, mensagem e arquivo:linha. Se não há erro, é bug de lógica.</span></li>
+      <li><b>Desconfie de um lugar</b><span>"A soma está errada, então o problema está onde a soma é feita."</span></li>
+      <li><b>Pause ali</b><span>Breakpoint de linha, de evento (click) ou a palavra <code>debugger;</code>.</span></li>
+      <li><b>Observe</b><span>Scope e Watch mostram os valores reais. <code>typeof sum</code> entrega o culpado.</span></li>
+      <li><b>Corrija e teste</b><span>Mude uma coisa só, desative os breakpoints e rode de novo.</span></li>
+    </ol>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Cuidado!</h2></div>
+    <div class="cuidado">
+      <div><b>Não leia só a 1ª linha</b><span>Olhe o arquivo e a linha (script.js:3): eles levam ao culpado.</span></div>
+      <div><b>Mude uma coisa por vez</b><span>Trocar cinco coisas juntas esconde qual delas resolveu.</span></div>
+      <div><b>Limpe a cena do crime</b><span>Apague <code>console.log</code> e <code>debugger</code> extras antes de entregar.</span></div>
+      <div><b>Explique para o patinho</b><span>Contar o código em voz alta (rubber duck) revela muito bug.</span></div>
+    </div>
+  </section>
+
+  <section class="block" id="praticar">
+    <div class="sh"><h2>Vamos praticar?</h2><p>Tente sozinho primeiro. As dicas abrem uma de cada vez; a resposta fica por último.</p></div>
+    <div class="prac">
+      <div class="ex">
+        <span class="bugcount">3 bugs · use o Console</span>
+        <h3>1) A média que não sai</h3>
+        <p>Deveria mostrar a média ≈ 8.17.</p>
+<pre>const alunos = ["Ana", "Bruno", "Carla"];
+const notas = [8.5, 7, 9];
+let soma = "0";
+for (let i = 1; i &lt; notas.length; i++) {
+  soma += notas[i];
+}
+console.log("Média: " + soma / alunos.lenght);</pre>
+        <button class="btn" data-run='const alunos = ["Ana", "Bruno", "Carla"];
+const notas = [8.5, 7, 9];
+let soma = "0";
+for (let i = 1; i < notas.length; i++) {
+  soma += notas[i];
+}
+console.log("soma:", soma, "| typeof:", typeof soma);
+console.log("Média: " + soma / alunos.lenght);' style="align-self:flex-start">Rodar no Console ↑</button>
+        <details><summary>Dica</summary>Coloque <code>console.log(i, soma)</code> dentro do for. Qual é o primeiro <code>i</code>? E qual o tipo de <code>soma</code>?</details>
+        <details><summary>Resposta</summary><ul><li><code>let soma = "0"</code> é texto: <code>+=</code> concatena. Use <code>0</code>.</li><li>O for começa em <code>i = 1</code> e pula a Ana. Use <code>i = 0</code>.</li><li><code>alunos.lenght</code> não existe (é <code>undefined</code>) e a divisão dá <code>NaN</code>. É <code>length</code>.</li></ul></details>
+      </div>
+      <div class="ex">
+        <span class="bugcount">2 bugs · use breakpoints e Watch</span>
+        <h3>2) O maior número</h3>
+        <p>Faça no Sources › Snippets: cole, clique no número da linha e rode com <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</p>
+<pre>function maior(lista) {
+  let maior = 0;
+  for (const n of lista) {
+    if (n &lt; maior) maior = n;
+  }
+  return maior;
+}
+console.log(maior([3, 9, 4]));    // esperado 9
+console.log(maior([-5, -2, -8])); // esperado -2</pre>
+        <details><summary>Dica</summary>Adicione <code>n</code> e <code>maior</code> no Watch e dê Step over volta a volta. Quando <code>maior</code> deveria trocar?</details>
+        <details><summary>Resposta</summary><ul><li>A comparação está invertida: <code>n &lt; maior</code> deveria ser <code>n &gt; maior</code>.</li><li>Começar em <code>0</code> quebra listas só de negativos. Comece com <code>lista[0]</code> (ou <code>-Infinity</code>).</li></ul></details>
+      </div>
+      <div class="ex">
+        <span class="bugcount">2 bugs · leia a mensagem de erro</span>
+        <h3>3) O botão mudo</h3>
+        <p>O botão não funciona.</p>
+<pre>&lt;button id="enviar"&gt;Enviar&lt;/button&gt;
+
+function mostrar() { alert("Enviado!"); }
+document.querySelector("enviar")
+  .addEventListener("click", mostrar());</pre>
+        <button class="btn" data-run='document.querySelector("enviar").addEventListener("click", function(){});' style="align-self:flex-start">Ver o erro no Console ↑</button>
+        <details><summary>Dica</summary>O erro é aquele do "Lendo o erro": <code>Cannot read properties of null</code>. Por que o <code>querySelector</code> devolveu <code>null</code>?</details>
+        <details><summary>Resposta</summary><ul><li>Falta o <code>#</code>: <code>querySelector("#enviar")</code>. Sem ele, o navegador procura uma tag <code>&lt;enviar&gt;</code>.</li><li><code>mostrar()</code> com parênteses executa na hora e passa o retorno (<code>undefined</code>). Passe a função: <code>mostrar</code>.</li></ul></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sh"><h2>Atalhos de todo dia</h2></div>
+    <div class="keys-grid">
+      <div><b>Abrir o DevTools</b><span><kbd>F12</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>I</kbd> · ou botão direito › Inspecionar</small></div>
+      <div><b>Abrir direto no Console</b><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>J</kbd></small></div>
+      <div><b>Selecionar elemento</b><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></small></div>
+      <div><b>Abrir arquivo pelo nome</b><span><kbd>Ctrl</kbd>+<kbd>P</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>P</kbd> · dentro do DevTools</small></div>
+      <div><b>Menu de comandos</b><span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> · busca qualquer função</small></div>
+      <div><b>Rodar snippet</b><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span><small>Mac: <kbd>⌘</kbd>+<kbd>Enter</kbd> · Sources › Snippets</small></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Demo real para fazer em aula: <a href="https://googlechrome.github.io/devtools-samples/debug-js/get-started" target="_blank" rel="noopener">googlechrome.github.io/devtools-samples/debug-js/get-started</a> (abra numa janela anônima)</span>
+    <span>Documentação: <a href="https://developer.chrome.com/docs/devtools?hl=pt-br" target="_blank" rel="noopener">developer.chrome.com/docs/devtools</a></span>
+  </footer>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let toastT;
+function toast(msg) { let t = $(".toast"); if (!t) { t = document.createElement("div"); t.className = "toast"; document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3200); }
+
+/* =================== EXPLICAÇÕES =================== */
+const EX = {
+  start: { tag: "Comece aqui", t: "O que é o DevTools?", b: `<p>O <b>DevTools</b> é um conjunto de ferramentas que já vem dentro do navegador. Ele mostra o que o navegador está fazendo com a sua página: o HTML que montou, o CSS aplicado, o JavaScript rodando, as requisições de rede e os dados salvos.</p><p>Com ele dá para <b>pausar o código no meio da execução</b>, olhar as variáveis daquele momento e andar uma linha de cada vez. É bem mais prático que encher o código de <code>console.log</code>.</p><div class="tip"><b>Missão:</b> a página acima soma 5 + 1 e mostra 51. Clique no botão dela para ver o bug, depois descubra o porquê usando o Sources.</div>`, k: "Abrir: F12 · Ctrl+Shift+I · Mac ⌘+⌥+I · botão direito › Inspecionar" },
+  mockpage: { tag: "A página", t: "A página com bug", b: `<p>Esta é uma cópia simulada da demo oficial do Chrome que usamos em aula. Ela pega o texto dos dois campos e soma.</p><p>Digite outros números, clique em <b>Somar</b> e observe: o resultado gruda os números em vez de somar. Não aparece nenhum erro no console. É um <b>erro de lógica</b>, o tipo mais traiçoeiro.</p>` },
+  inspect: { tag: "Barra do DevTools", t: "Selecionar elemento", b: `<p>Ative este ícone e passe o mouse pela página: cada elemento acende com o nome da tag e o tamanho. Clique e o DevTools pula para esse elemento na aba <b>Elements</b>.</p><div class="tip"><b>Teste:</b> ative e clique no botão azul da página.</div>`, k: "Atalho: Ctrl+Shift+C · Mac ⌘+Shift+C" },
+  device: { tag: "Barra do DevTools", t: "Modo dispositivo", b: `<p>Simula a tela de um celular ou tablet. No Chrome real dá para escolher modelos (iPhone, Galaxy…), girar a tela e até limitar a internet.</p><p>Serve para testar o layout responsivo sem precisar de um celular na mão. Clique de novo para voltar.</p>`, k: "Atalho: Ctrl+Shift+M · Mac ⌘+Shift+M" },
+  "tab-elements": { tag: "Aba", t: "Elements", b: `<p>Mostra o <b>DOM</b>: a árvore de elementos que o navegador montou a partir do HTML, já com tudo que o JavaScript mudou depois. Por isso pode ser diferente do "Exibir código-fonte".</p><ul><li>À esquerda: a árvore. Passe o mouse e o elemento acende na página.</li><li>À direita: <b>Styles</b>, as regras CSS que valem para o elemento selecionado.</li><li>Embaixo: o <b>box model</b> com margin, border, padding e conteúdo.</li></ul><div class="tip"><b>Atenção:</b> o que você muda aqui não é salvo no arquivo. É um rascunho para testar ideias.</div>` },
+  "dom-node": { tag: "Elements", t: "Árvore do DOM", b: `<p>Cada linha é um elemento. Clique para selecionar e veja os estilos dele ao lado. No Chrome real:</p><ul><li>Duplo clique edita o texto ou um atributo.</li><li>O elemento selecionado vira <code>$0</code> no Console: digite <code>$0.textContent</code> para ler o texto dele.</li><li>Botão direito › <i>Break on</i> cria um breakpoint quando o elemento muda.</li></ul>` },
+  styles: { tag: "Elements", t: "Painel Styles", b: `<p>Lista as regras CSS do elemento, da mais específica (em cima) para a menos específica. Propriedade <s>riscada</s> é aquela que foi sobrescrita por outra regra.</p><ul><li>A caixinha liga e desliga a propriedade.</li><li>Clique no valor para editar e veja a página mudar na hora.</li><li>O link à direita (<code>style.css:26</code>) diz em que arquivo e linha a regra está.</li></ul><div class="tip"><b>Teste:</b> selecione o <code>&lt;p&gt;</code> e troque a cor para <code>green</code>.</div>` },
+  boxmodel: { tag: "Elements", t: "Box model", b: `<p>Todo elemento é uma caixa com quatro camadas: <b>margin</b> (fora), <b>border</b>, <b>padding</b> (dentro da borda) e o <b>conteúdo</b>.</p><p>Os números aqui são calculados de verdade a partir da página acima. Quando um elemento "não cabe" ou fica desalinhado, a resposta quase sempre está aqui.</p>` },
+  "tab-console": { tag: "Aba", t: "Console", b: `<p>O Console faz duas coisas:</p><ul><li><b>Mostra mensagens:</b> seus <code>console.log</code>, os erros em vermelho e os avisos em amarelo.</li><li><b>Executa JavaScript</b> na página: tudo o que é global está acessível. Experimente <code>getNumber1()</code> ou <code>typeof getNumber1()</code>.</li></ul><div class="tip"><b>Dica da profa.:</b> escreva o nome da variável junto do valor: <code>console.log("total:", total)</code>. Um console cheio de números soltos não ajuda ninguém.</div>`, k: "Abrir direto: Ctrl+Shift+J · Mac ⌘+⌥+J" },
+  "console-input": { tag: "Console", t: "Linha de comando", b: `<p>Digite qualquer expressão e aperte <kbd>Enter</kbd>. O resultado aparece com <code>←</code>.</p><ul><li><kbd>↑</kbd> e <kbd>↓</kbd> navegam pelos comandos anteriores.</li><li>Se der erro, ele aparece em vermelho com o tipo e a mensagem.</li></ul>` },
+  "console-levels": { tag: "Console", t: "Níveis e filtros", b: `<p>Cada mensagem tem um nível: <b>log/info</b> (normal), <b>warn</b> (amarelo) e <b>error</b> (vermelho). Use os filtros para ver só os erros quando o console estiver lotado.</p><p>No Chrome real também existe a caixa <i>Filter</i> para buscar por texto.</p>` },
+  "console-clear": { tag: "Console", t: "Limpar o console", b: `<p>Apaga as mensagens da tela (não desfaz nada no código). Bom para começar um teste do zero.</p>`, k: "Atalho: Ctrl+L · ou digite console.clear()" },
+  "console-methods": { tag: "Console", t: "Console além do log", b: `<ul><li><code>console.log()</code> informação.</li><li><code>console.warn()</code> alerta amarelo.</li><li><code>console.error()</code> erro vermelho.</li><li><code>console.table()</code> mostra um array de objetos como tabela.</li><li><code>console.group()</code> agrupa mensagens.</li><li><code>console.time()</code> / <code>timeEnd()</code> mede quanto tempo algo demora.</li></ul><div class="tip"><b>Mini tarefa, caça ao bug:</b> rode o exemplo do <code>for</code> com <code>&lt;=</code> e descubra qual valor estranho aparece.</div>` },
+  "tab-sources": { tag: "Aba", t: "Sources", b: `<p>É aqui que depuramos o JavaScript. São três painéis:</p><ul><li><b>Navegador de arquivos</b> (esquerda): os arquivos que a página carregou.</li><li><b>Código</b> (centro): o conteúdo do arquivo. Clique no número da linha para criar um breakpoint.</li><li><b>Depuração</b> (direita): botões de passo, Watch, Scope e Call Stack.</li></ul><div class="tip"><b>Roteiro dos slides:</b> em Event Listener Breakpoints, abra <b>Mouse</b>, marque <b>click</b> e clique no botão da página.</div>` },
+  "file-tree": { tag: "Sources", t: "Navegador de arquivos", b: `<p>Mostra tudo que a página baixou, organizado por domínio. Clique num arquivo para abrir no painel de código.</p><p>No Chrome real, <kbd>Ctrl</kbd>+<kbd>P</kbd> abre um arquivo pelo nome, muito útil em projetos grandes.</p>` },
+  snippets: { tag: "Sources", t: "Snippets", b: `<p>Snippets são pequenos scripts que ficam salvos no seu DevTools e rodam em qualquer página. Ótimos para treinar, como no exercício 2.</p><p><b>Como usar:</b> Sources › Snippets › <i>New snippet</i>, cole o código, clique no número da linha para criar breakpoints e rode com <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</p>` },
+  gutter: { tag: "Sources", t: "Breakpoint de linha", b: `<p>Clique no <b>número da linha</b>: aparece um marcador azul. Quando o código chegar ali, ele pausa <b>antes</b> de executar aquela linha.</p><p>No Chrome real, botão direito no número oferece mais dois tipos:</p><ul><li><b>Conditional breakpoint:</b> só pausa se a condição for verdadeira, ex.: <code>addend1 === "5"</code>.</li><li><b>Logpoint:</b> imprime no console sem pausar e sem mexer no código.</li></ul><div class="tip"><b>Mini tarefa dos slides:</b> crie um breakpoint na <b>linha 31</b>, clique no botão e observe <code>addend1</code> e <code>addend2</code> no Scope.</div>` },
+  "debugger-kw": { tag: "Código", t: "A palavra debugger", b: `<p>Escrever <code>debugger;</code> no código tem o mesmo efeito de um breakpoint: com o DevTools aberto, o código congela nessa linha.</p><p>Com o DevTools fechado, ela não faz nada. Lembre de apagar antes de entregar.</p>` },
+  "btn-resume": { tag: "Controles", t: "Resume", b: `<p>Continua a execução normalmente até o <b>próximo breakpoint</b>. Se não houver outro, o código termina.</p>`, k: "Atalho: F8" },
+  "btn-over": { tag: "Controles", t: "Step over", b: `<p>Executa a linha atual inteira e para na próxima. Se a linha chama uma função, ela roda toda <b>sem você entrar nela</b>.</p><p>Use quando você confia na função chamada e só quer o resultado.</p>`, k: "Atalho: F10" },
+  "btn-into": { tag: "Controles", t: "Step into", b: `<p>Se a linha chama uma função, <b>entra dentro dela</b> e para na primeira linha. Na linha 29, por exemplo, entra em <code>getNumber1()</code>.</p><p>Use quando você desconfia da função chamada.</p>`, k: "Atalho: F11" },
+  "btn-out": { tag: "Controles", t: "Step out", b: `<p>Termina a função atual e volta para quem a chamou. É a saída quando você entrou numa função sem querer.</p>`, k: "Atalho: Shift+F11" },
+  "btn-deact": { tag: "Controles", t: "Desativar breakpoints", b: `<p>Mantém os marcadores no lugar, mas faz o depurador ignorá-los. Eles ficam azul-claro.</p><p>É o que o slide pede depois da correção: desative, salve e retome para ver o código rodar livre.</p>`, k: "Atalho: Ctrl+F8" },
+  scope: { tag: "Depuração", t: "Scope", b: `<p>Mostra as variáveis que existem naquele instante da pausa:</p><ul><li><b>Local:</b> as da função onde o código está parado.</li><li><b>Global:</b> as do <code>window</code>, incluindo os <code>var</code> do topo do arquivo, como <code>inputs</code> e <code>label</code>.</li></ul><p>Valores que acabaram de mudar piscam em amarelo.</p><div class="tip"><b>Olhe as aspas:</b> <code>addend1: "5"</code> com aspas é uma <b>string</b>. Aí está a pista.</div>` },
+  watch: { tag: "Depuração", t: "Watch", b: `<p>Aqui você acompanha <b>expressões</b> ao longo do tempo. Elas são recalculadas a cada passo.</p><p>Como nos slides, <code>typeof sum</code> mostra que a soma é uma <code>"string"</code>. Adicione as suas: <code>addend1 + 1</code>, <code>Number(addend1)</code>…</p>` },
+  callstack: { tag: "Depuração", t: "Call Stack", b: `<p>A pilha de chamadas: quem chamou quem. A linha de cima é onde o código está agora; as de baixo são as funções que estão esperando ela terminar.</p><p>Clique numa função para ver de onde ela foi chamada (a linha fica destacada no código).</p>` },
+  bplist: { tag: "Depuração", t: "Lista de breakpoints", b: `<p>Todos os breakpoints de linha, com a caixinha para ligar e desligar um por um, sem precisar caçar no código.</p>` },
+  "xhr-bp": { tag: "Depuração", t: "XHR/fetch Breakpoints", b: `<p>Pausa quando o código fizer uma requisição cuja URL contém um texto, ex.: <code>/users</code>. Vamos precisar disso na Aula 16, com o <code>fetch</code>.</p>` },
+  "dom-bp": { tag: "Depuração", t: "DOM Breakpoints", b: `<p>Pausa quando um elemento muda: atributo alterado, filho adicionado ou elemento removido. Ótimo para descobrir <i>qual</i> código está mexendo naquele pedaço da página.</p>` },
+  "event-bp": { tag: "Depuração", t: "Event Listener Breakpoints", b: `<p>Pausa na primeira linha de <b>qualquer</b> ouvinte de um evento. É o caminho do slide: sabemos que a soma é calculada no clique do botão, então:</p><ul><li>Abra <b>Mouse</b>.</li><li>Marque <b>click</b>.</li><li>Clique no botão da página.</li></ul><div class="tip"><b>Dica:</b> na janela anônima (sem extensões) a pausa cai exatamente no código da página. Na janela normal, extensões também ouvem cliques e a pausa pode cair no código delas.</div>` },
+  fix: { tag: "Correção", t: "Bug achado!", b: `<p>Os inputs devolvem <b>texto</b>. E com texto, o <code>+</code> concatena: <code>"5" + "1"</code> vira <code>"51"</code>.</p><p>A correção da linha 31:</p><p><code>var sum = parseInt(addend1) + parseInt(addend2);</code></p><p>Depois: desative os breakpoints, salve (<kbd>Ctrl</kbd>+<kbd>S</kbd>) e retome.</p><div class="tip"><b>Atenção:</b> editar no Sources só vale até recarregar a página. A correção de verdade vai no seu arquivo, no editor.</div>` },
+  paused: { tag: "Pausado", t: "O código congelou", b: `<p>A linha amarela é a <b>próxima</b> a ser executada (ela ainda não rodou). A página fica parada e o banner "Pausado no depurador" aparece em cima dela.</p><p>Agora olhe o <b>Scope</b> e o <b>Watch</b>, e avance com os botões de passo.</p>`, k: "F8 continuar · F10 próxima linha · F11 entrar · Shift+F11 sair" },
+  "tab-network": { tag: "Aba", t: "Network", b: `<p>Registra <b>todas</b> as requisições da página: HTML, CSS, JS, imagens e os <code>fetch</code> para APIs.</p><ul><li><b>Status:</b> 200 deu certo, 404 não encontrado (em vermelho).</li><li><b>Type, Size, Time:</b> o que é, quanto pesa e quanto demorou.</li><li><b>Waterfall:</b> a linha do tempo de cada requisição.</li></ul><div class="tip"><b>Importante:</b> o Network só grava com o DevTools aberto. Abra e recarregue a página (<kbd>F5</kbd>). Vamos aprofundar na Aula 16.</div>` },
+  "net-row": { tag: "Network", t: "Uma requisição", b: `<p>Clicando numa linha você vê os detalhes: URL, método, status, cabeçalhos e a resposta. O <code>favicon.ico</code> com 404 é comum: o navegador sempre tenta buscar o ícone da aba, mesmo que o site não tenha um.</p>` },
+  "net-filter": { tag: "Network", t: "Filtros por tipo", b: `<p>Mostram só um tipo de requisição. O mais usado em JavaScript é <b>Fetch/XHR</b>: são as chamadas que o seu código faz para APIs.</p>` },
+  "preserve-log": { tag: "Network", t: "Preserve log", b: `<p>Normalmente a lista é apagada quando a página recarrega ou muda. Com <b>Preserve log</b>, as requisições antigas ficam. Essencial para depurar formulários que mudam de página ao enviar.</p>` },
+  "disable-cache": { tag: "Network", t: "Disable cache", b: `<p>Faz o navegador baixar tudo de novo em vez de usar a cópia guardada. Use quando você mudou o CSS ou o JS e a página "não atualiza".</p>` },
+  throttling: { tag: "Network", t: "Throttling", b: `<p>Simula uma internet lenta (Slow 4G) ou sem internet (Offline). Serve para ver se o seu "Carregando..." aparece e se o site trata a falta de rede.</p>` },
+  "tab-application": { tag: "Aba", t: "Application", b: `<p>Mostra o que o site guardou <b>dentro do navegador</b>:</p><ul><li><b>Local storage:</b> pares chave → valor que ficam mesmo depois de fechar a aba.</li><li><b>Session storage:</b> igual, mas some quando a aba fecha.</li><li><b>Cookies:</b> pequenos dados enviados junto com as requisições.</li><li><b>IndexedDB:</b> um banco de dados no navegador.</li></ul><p>Dá para ver, editar e apagar. Na Aula 16 você vai entregar um print daqui.</p>` },
+  "storage-local": { tag: "Application", t: "Local storage", b: `<p>A "gavetinha" do navegador: guarda <b>texto</b> por chave, separado por site. Objetos precisam de <code>JSON.stringify</code> para entrar e <code>JSON.parse</code> para sair.</p><p>Quando algo "funciona no meu computador e não no seu", às vezes é um dado velho aqui. Selecione uma linha e apague para testar do zero.</p>` },
+  "storage-session": { tag: "Application", t: "Session storage", b: `<p>Mesma ideia do local storage, mas os dados duram só enquanto a aba estiver aberta.</p>` },
+  "storage-idb": { tag: "Application", t: "IndexedDB", b: `<p>Um banco de dados de verdade dentro do navegador, para guardar muitos dados (inclusive arquivos). É o que apps que funcionam offline usam.</p>` },
+  cookies: { tag: "Application", t: "Cookies", b: `<p>Dados pequenos que o navegador envia automaticamente ao servidor em cada requisição para aquele site. Login costuma usar cookie.</p><p><b>HttpOnly</b> significa que o JavaScript não consegue ler o cookie, uma proteção de segurança.</p>` },
+  sw: { tag: "Application", t: "Service workers e cache", b: `<p>Scripts que rodam em segundo plano e podem guardar arquivos para o site funcionar offline. Assunto avançado; por ora, saiba que é aqui que eles aparecem.</p>` },
+  "tab-performance": { tag: "Aba", t: "Performance", b: `<p>Grava tudo o que o navegador faz durante alguns segundos e desenha numa linha do tempo:</p><ul><li><b>Amarelo:</b> JavaScript rodando.</li><li><b>Roxo:</b> calcular estilos e layout.</li><li><b>Verde:</b> pintar a tela.</li></ul><p>Tarefas com mais de 50 ms ganham um canto vermelho: são elas que deixam a página travada.</p>` },
+  "perf-record": { tag: "Performance", t: "Gravar", b: `<p>Clique em Gravar, faça a ação lenta (aqui, clicar no botão da página) e pare. O resultado é o gráfico abaixo.</p>` },
+  "perf-flame": { tag: "Performance", t: "Flame chart", b: `<p>Cada barra é uma função. Barras empilhadas mostram quem chamou quem, de cima para baixo, igual à Call Stack. Quanto mais larga, mais tempo levou.</p>` },
+  "tab-memory": { tag: "Aba", t: "Memory", b: `<p>Tira uma "foto" da memória (heap snapshot) para descobrir o que está ocupando espaço. Serve para caçar <b>vazamentos de memória</b>: quando a página fica mais pesada quanto mais tempo fica aberta.</p><p>Dica: tire um snapshot, use a página, tire outro e compare.</p>` },
+  "memory-types": { tag: "Memory", t: "Tipos de análise", b: `<ul><li><b>Heap snapshot:</b> foto de tudo num instante.</li><li><b>Allocations on timeline:</b> o que foi criado ao longo do tempo.</li><li><b>Allocation sampling:</b> amostragem leve, boa para gravações longas.</li></ul>` },
+  "tab-lighthouse": { tag: "Aba", t: "Lighthouse", b: `<p>Uma auditoria automática da página com notas de 0 a 100 em quatro áreas: <b>Performance</b>, <b>Acessibilidade</b>, <b>Boas práticas</b> e <b>SEO</b>.</p><p>Além da nota, ele lista o que corrigir e explica por quê. Ótimo para revisar um projeto antes de entregar.</p>` }
+};
+function explain(key, pulseEl) {
+  const e = EX[key]; if (!e) return;
+  $("#exTag").textContent = e.tag; $("#exTitle").textContent = e.t;
+  $("#exBody").innerHTML = e.b + (e.k ? `<div class="keys">⌨ ${esc(e.k)}</div>` : "");
+  if (pulseEl) { pulseEl.classList.remove("hot"); void pulseEl.offsetWidth; pulseEl.classList.add("hot"); }
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-ex]"); if (!t) return;
+  if (t.closest(".board")) return;
+  explain(t.dataset.ex);
+});
+
+/* =================== ABAS =================== */
+function showTab(name, silent) {
+  $$(".dt-tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $$(".dt-panel").forEach(p => p.hidden = p.dataset.panel !== name);
+  if (!silent) explain("tab-" + name);
+  if (name === "elements") renderBox();
+}
+$$(".dt-tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* =================== PÁGINA SIMULADA + ELEMENTS =================== */
+const RULES = {
+  body: { sel: "body", src: "style.css:1", targets: ["m-body"], props: [["font-family", "Georgia, serif"], ["padding", "18px 20px"]] },
+  h1: { sel: "h1", src: "style.css:5", targets: ["m-h1"], props: [["font-size", "20px"], ["color", "#1f2a5a"], ["margin", "0 0 10px"]] },
+  label: { sel: "label", src: "style.css:11", targets: ["m-l1", "m-l2"], props: [["display", "block"], ["font-size", "13px"], ["margin-top", "8px"]] },
+  input: { sel: "input", src: "style.css:17", targets: ["m-in1", "m-in2"], props: [["padding", "6px 8px"], ["border", "1px solid #9aa3b5"], ["border-radius", "4px"], ["width", "120px"]] },
+  button: { sel: "button", src: "style.css:24", targets: ["m-btn"], props: [["margin-top", "14px"], ["padding", "8px 12px"], ["background", "#1a6fe0"], ["color", "#ffffff"], ["border", "none"], ["border-radius", "4px"], ["cursor", "pointer"]] },
+  p: { sel: "p", src: "style.css:33", targets: ["m-p"], props: [["font-size", "18px"], ["font-weight", "700"], ["color", "#b3261e"], ["min-height", "26px"], ["margin", "12px 0 0"]] }
+};
+Object.values(RULES).forEach(r => r.props = r.props.map(([n, v]) => ({ n, v, on: true })));
+function applyRule(r) { r.targets.forEach(id => { const el = document.getElementById(id); r.props.forEach(p => p.on ? el.style.setProperty(p.n, p.v) : el.style.removeProperty(p.n)); }); }
+Object.values(RULES).forEach(applyRule);
+
+const T = (n, attrs = "", inner = null, closeOnly = false) => {
+  if (closeOnly) return `<span class="tg">&lt;/${n}&gt;</span>`;
+  const a = attrs ? " " + attrs.split("|").map(p => { const [k, v] = p.split("="); return v !== undefined ? `<span class="at">${k}</span>=<span class="av">"${esc(v)}"</span>` : `<span class="at">${k}</span>`; }).join(" ") : "";
+  return `<span class="tg">&lt;${n}</span>${a}<span class="tg">&gt;</span>` + (inner !== null ? `<span class="tx">${inner}</span><span class="tg">&lt;/${n}&gt;</span>` : "");
+};
+const DOM_ROWS = [
+  { d: 0, h: `<span class="muted">&lt;!DOCTYPE html&gt;</span>` },
+  { d: 0, h: T("html", "lang=pt-BR") },
+  { d: 1, h: T("head") + "…" + T("head", "", null, true) },
+  { d: 1, h: T("body"), el: "m-body", rule: "body" },
+  { d: 2, h: T("h1", "", "Demo: Primeiros passos no debug de JavaScript"), el: "m-h1", rule: "h1" },
+  { d: 2, h: T("label", "for=num1", "Número 1"), el: "m-l1", rule: "label" },
+  { d: 2, h: T("input", "id=num1|value=5"), el: "m-in1", rule: "input" },
+  { d: 2, h: T("label", "for=num2", "Número 2"), el: "m-l2", rule: "label" },
+  { d: 2, h: T("input", "id=num2|value=1"), el: "m-in2", rule: "input" },
+  { d: 2, h: T("button", "", "Somar Número 1 e Número 2"), el: "m-btn", rule: "button" },
+  { d: 2, h: () => T("p", "", esc($("#m-p").textContent)), el: "m-p", rule: "p" },
+  { d: 2, h: T("script", "src=get-started.js", "") },
+  { d: 1, h: T("body", "", null, true) },
+  { d: 0, h: T("html", "", null, true) }
+];
+let selRow = 10;
+function renderDom() {
+  $("#dom").innerHTML = DOM_ROWS.map((r, i) => `<div class="row${i === selRow ? " sel" : ""}" data-i="${i}" style="padding-left:${10 + r.d * 16}px">${typeof r.h === "function" ? r.h() : r.h}</div>`).join("");
+}
+function renderStyles() {
+  const r = DOM_ROWS[selRow]; const box = $("#styles");
+  if (!r || !r.rule) { box.innerHTML = `<div class="rule muted">Sem regras para este nó.</div>`; return; }
+  const rule = RULES[r.rule];
+  box.innerHTML = `<div class="rule"><span class="sel-n">element.style</span> {<br>}</div>
+  <div class="rule"><span class="src">${rule.src}</span><span class="sel-n">${rule.sel}</span> {` +
+    rule.props.map((p, i) => `<div class="prop${p.on ? "" : " off"}"><input type="checkbox" ${p.on ? "checked" : ""} data-pi="${i}" aria-label="Ligar ${p.n}"><span class="pn">${p.n}</span>: ${/^#|^rgb/.test(p.v) ? `<span class="swatch" style="background:${esc(p.v)}"></span>` : ""}<span class="pv" contenteditable="true" spellcheck="false" data-pi="${i}">${esc(p.v)}</span>;</div>`).join("") + `}</div>`;
+  box.querySelectorAll("input[data-pi]").forEach(cb => cb.addEventListener("change", () => { rule.props[+cb.dataset.pi].on = cb.checked; applyRule(rule); renderStyles(); renderBox(); }));
+  box.querySelectorAll(".pv").forEach(pv => {
+    pv.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pv.blur(); } });
+    pv.addEventListener("input", () => { rule.props[+pv.dataset.pi].v = pv.textContent.trim(); applyRule(rule); renderBox(); });
+  });
+}
+function renderBox() {
+  const r = DOM_ROWS[selRow]; const out = $("#boxm");
+  if (!r || !r.el) { out.innerHTML = ""; return; }
+  const cs = getComputedStyle(document.getElementById(r.el));
+  const v = k => Math.round(parseFloat(cs[k]) || 0);
+  const el = document.getElementById(r.el);
+  const w = Math.round(el.clientWidth - v("paddingLeft") - v("paddingRight")), h = Math.round(el.clientHeight - v("paddingTop") - v("paddingBottom"));
+  out.innerHTML = `<div class="boxm"><div class="bm-m"><small>margin</small>${v("marginTop")}<div class="bm-b"><small>border</small>${v("borderTopWidth")}<div class="bm-p"><small>padding</small>${v("paddingTop")}<div class="bm-c">${Math.max(w, 0)} × ${Math.max(h, 0)}</div>${v("paddingBottom")}</div>${v("borderBottomWidth")}</div>${v("marginBottom")}</div></div>`;
+}
+function overlayOn(id) {
+  const el = document.getElementById(id); const ov = $("#overlay"); const host = $("#m-body");
+  if (!el) return;
+  const a = el.getBoundingClientRect(), b = host.getBoundingClientRect();
+  Object.assign(ov.style, { display: "block", left: (a.left - b.left) + "px", top: (a.top - b.top) + "px", width: a.width + "px", height: a.height + "px" });
+  if (id === "m-body") ov.style.outlineOffset = "-1px";
+  ov.querySelector("span").textContent = `${el.tagName.toLowerCase()}${el.id && el.id.startsWith("m-in") ? "#num" + el.id.slice(-1) : ""}  ${Math.round(a.width)} × ${Math.round(a.height)}`;
+  ov.querySelector("span").style.top = (a.top - b.top) < 24 ? "100%" : "-22px";
+}
+function overlayOff() { $("#overlay").style.display = "none"; }
+function selectRow(i) { selRow = i; renderDom(); renderStyles(); renderBox(); }
+$("#dom").addEventListener("mouseover", e => { const row = e.target.closest(".row"); if (!row) return; const r = DOM_ROWS[+row.dataset.i]; r && r.el ? overlayOn(r.el) : overlayOff(); });
+$("#dom").addEventListener("mouseleave", overlayOff);
+$("#dom").addEventListener("click", e => { const row = e.target.closest(".row"); if (row) { selectRow(+row.dataset.i); explain("dom-node"); } });
+
+let inspecting = false;
+$("#inspectBtn").addEventListener("click", () => { inspecting = !inspecting; $("#inspectBtn").setAttribute("aria-pressed", inspecting); $("#m-body").classList.toggle("inspecting", inspecting); if (!inspecting) overlayOff(); });
+const mock = $("#m-body");
+mock.addEventListener("mousemove", e => { if (!inspecting) return; const el = e.target.closest("[id^='m-']"); if (el && el.id !== "overlay") overlayOn(el.id); });
+mock.addEventListener("click", e => {
+  if (!inspecting) return;
+  e.preventDefault(); e.stopPropagation();
+  const el = e.target.closest("[id^='m-']"); const i = DOM_ROWS.findIndex(r => r.el === (el && el.id));
+  inspecting = false; $("#inspectBtn").setAttribute("aria-pressed", "false"); mock.classList.remove("inspecting"); overlayOff();
+  if (i >= 0) { showTab("elements", true); selectRow(i); explain("dom-node"); }
+}, true);
+$("#deviceBtn").addEventListener("click", () => { const on = $("#viewport").classList.toggle("mobile"); $("#deviceBtn").setAttribute("aria-pressed", on); });
+
+/* =================== CONSOLE =================== */
+const conOut = $("#conOut"); let filter = "all", counts = { error: 0, warn: 0 }, groupDepth = 0; const timers = {};
+function fmt(v, top = true, depth = 0) {
+  if (typeof v === "string") return top ? esc(v) : `<span class="v-str">"${esc(v)}"</span>`;
+  if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return `<span class="v-num">${String(v)}</span>`;
+  if (v === undefined) return `<span class="v-und">undefined</span>`;
+  if (v === null) return `<span class="v-und">null</span>`;
+  if (typeof v === "function") return `<i>ƒ</i> ${esc(v.name || "anonymous")}()`;
+  if (v instanceof Promise) return `Promise {&lt;pending&gt;}`;
+  if (v instanceof Error) return esc(v.name + ": " + v.message);
+  if (v instanceof Element) return `<span class="tg">&lt;${v.tagName.toLowerCase()}&gt;</span>`;
+  if (depth > 1) return Array.isArray(v) ? `Array(${v.length})` : "{…}";
+  if (Array.isArray(v)) return `(${v.length}) [${v.slice(0, 10).map(x => fmt(x, false, depth + 1)).join(", ")}${v.length > 10 ? ", …" : ""}]`;
+  if (typeof v === "object") { const ks = Object.keys(v); return `{${ks.slice(0, 6).map(k => `<span class="v-key">${esc(k)}</span>: ${fmt(v[k], false, depth + 1)}`).join(", ")}${ks.length > 6 ? ", …" : ""}}`; }
+  return esc(String(v));
+}
+function print(type, html, link) {
+  const icons = { in: "›", out: "←", error: "⨯", warn: "⚠", info: "ℹ", log: "" };
+  const d = document.createElement("div"); d.className = "ln " + type; d.dataset.lvl = type === "in" || type === "out" || type === "info" ? "log" : type;
+  d.innerHTML = `<span class="ic">${icons[type] || ""}</span><span class="bd" style="padding-left:${groupDepth * 14}px">${html}</span>${link ? `<span class="lk" data-goto="${link}">${link}</span>` : ""}`;
+  if (type === "error" || type === "warn") { counts[type]++; $("#cErr").textContent = counts.error; $("#cWarn").textContent = counts.warn; }
+  conOut.appendChild(d); applyFilter(); conOut.scrollTop = conOut.scrollHeight;
+}
+function applyFilter() { conOut.querySelectorAll(".ln").forEach(l => l.hidden = filter !== "all" && l.dataset.lvl !== filter); }
+$("#conFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return; filter = c.dataset.lvl; $$(".chip", $("#conFilters")).forEach(x => x.setAttribute("aria-pressed", String(x === c))); applyFilter(); });
+function clearConsole() { conOut.innerHTML = ""; counts = { error: 0, warn: 0 }; $("#cErr").textContent = 0; $("#cWarn").textContent = 0; groupDepth = 0; print("info", `<span class="muted">Console was cleared</span>`); }
+$("#conClear").addEventListener("click", clearConsole);
+conOut.addEventListener("click", e => { const l = e.target.closest("[data-goto]"); if (l) { const m = /:(\d+)/.exec(l.dataset.goto); showTab("sources", true); if (m) flashLine(+m[1]); } });
+
+const fakeConsole = {
+  log: (...a) => print("log", a.map(x => fmt(x, true)).join(" ")),
+  info: (...a) => print("info", a.map(x => fmt(x, true)).join(" ")),
+  warn: (...a) => print("warn", a.map(x => fmt(x, true)).join(" ")),
+  error: (...a) => print("error", a.map(x => fmt(x, true)).join(" ")),
+  table: data => {
+    if (!data || typeof data !== "object") return fakeConsole.log(data);
+    const rows = Array.isArray(data) ? data : Object.values(data); const keys = [...new Set(rows.flatMap(r => Object.keys(r || {})))];
+    print("log", `<table class="ctable"><tr><th>(índice)</th>${keys.map(k => `<th>${esc(k)}</th>`).join("")}</tr>${rows.map((r, i) => `<tr><td>${i}</td>${keys.map(k => `<td>${r && k in r ? fmt(r[k], false) : ""}</td>`).join("")}</tr>`).join("")}</table>`);
+  },
+  group: (...a) => { print("log", `▾ <b>${a.map(x => fmt(x, true)).join(" ")}</b>`); groupDepth++; },
+  groupEnd: () => { groupDepth = Math.max(0, groupDepth - 1); },
+  time: (l = "default") => { timers[l] = performance.now(); },
+  timeEnd: (l = "default") => { if (l in timers) print("log", `${esc(l)}: ${(performance.now() - timers[l]).toFixed(3)} ms`); },
+  count: (() => { const c = {}; return (l = "default") => { c[l] = (c[l] || 0) + 1; print("log", `${esc(l)}: ${c[l]}`); }; })(),
+  clear: () => clearConsole()
+};
+let evalBlocked = false;
+function runCode(code, fallback) {
+  print("in", `<span style="white-space:pre-wrap">${esc(code)}</span>`);
+  const orig = {}; Object.keys(fakeConsole).forEach(k => { orig[k] = console[k]; console[k] = fakeConsole[k]; });
+  try {
+    if (evalBlocked) throw new EvalError("blocked");
+    const r = (0, eval)(code);
+    if (!/^\s*console\.\w+\(.*\);?\s*$/.test(code) || r !== undefined) print("out", fmt(r, false));
+  } catch (e) {
+    if (e instanceof EvalError || /unsafe-eval|Content Security/i.test(e.message)) {
+      evalBlocked = true;
+      if (fallback) { try { fallback(); } catch (e2) { print("error", "Uncaught " + esc(e2.name + ": " + e2.message)); } }
+      else print("warn", "Neste ambiente o Console simulado só roda os exemplos prontos. No seu navegador, digite livremente!");
+    } else print("error", "Uncaught " + esc(e.name + ": " + e.message), "VM:1");
+  } finally { Object.keys(orig).forEach(k => console[k] = orig[k]); }
+}
+const EXAMPLES = [
+  { t: "console.log", code: `let total = 51;\nconsole.log("total:", total);`, fb: () => fakeConsole.log("total:", 51) },
+  { t: "console.warn", code: `console.warn("Estoque baixo!");`, fb: () => fakeConsole.warn("Estoque baixo!") },
+  { t: "console.error", code: `console.error("Falha ao salvar");`, fb: () => fakeConsole.error("Falha ao salvar") },
+  { t: "console.table", code: `console.table([{ nome: "Ana", nota: 8.5 }, { nome: "Bruno", nota: 7 }]);`, fb: () => fakeConsole.table([{ nome: "Ana", nota: 8.5 }, { nome: "Bruno", nota: 7 }]) },
+  { t: "console.group + time", code: `console.time("soma");\nconsole.group("Somando");\nconsole.log("addend1:", getNumber1());\nconsole.log("addend2:", getNumber2());\nconsole.groupEnd();\nconsole.timeEnd("soma");`, fb: () => { fakeConsole.time("soma"); fakeConsole.group("Somando"); fakeConsole.log("addend1:", getNumber1()); fakeConsole.log("addend2:", getNumber2()); fakeConsole.groupEnd(); fakeConsole.timeEnd("soma"); } },
+  { t: "Mini tarefa · caça ao bug", code: `const precos = [10, 20, 30];\nlet total = 0;\nfor (let i = 0; i <= precos.length; i++) {\n  console.log(i, precos[i]);\n  total += precos[i];\n}\nconsole.log(total); // NaN`, fb: () => { const p = [10, 20, 30]; let t = 0; for (let i = 0; i <= p.length; i++) { fakeConsole.log(i, p[i]); t += p[i]; } fakeConsole.log(t); } },
+  { t: "O tipo do valor", code: `typeof getNumber1()`, fb: () => { print("out", fmt(typeof getNumber1(), false)); } }
+];
+$("#conExamples").innerHTML = EXAMPLES.map((x, i) => `<button class="ex-btn" data-i="${i}"><b>${esc(x.t)}</b>${esc(x.code.split("\n")[0])}${x.code.includes("\n") ? " …" : ""}</button>`).join("");
+$("#conExamples").addEventListener("click", e => { const b = e.target.closest(".ex-btn"); if (!b) return; const x = EXAMPLES[+b.dataset.i]; runCode(x.code, x.fb); });
+const hist = []; let hi = 0;
+$("#conIn").addEventListener("keydown", e => {
+  const inp = e.target;
+  if (e.key === "Enter" && inp.value.trim()) { hist.push(inp.value); hi = hist.length; runCode(inp.value); inp.value = ""; }
+  else if (e.key === "ArrowUp" && hist.length) { hi = Math.max(0, hi - 1); inp.value = hist[hi]; e.preventDefault(); }
+  else if (e.key === "ArrowDown" && hist.length) { hi = Math.min(hist.length, hi + 1); inp.value = hist[hi] || ""; e.preventDefault(); }
+});
+// funções globais da "página", acessíveis no Console
+window.getNumber1 = () => $("#m-in1").value;
+window.getNumber2 = () => $("#m-in2").value;
+window.inputs = [$("#m-in1"), $("#m-in2")];
+window.label = $("#m-p");
+print("info", `<span class="muted">Dica: digite</span> <b>getNumber1() + getNumber2()</b> <span class="muted">e aperte Enter.</span>`);
+$$("[data-run]").forEach(b => b.addEventListener("click", () => {
+  showTab("console"); runCode(b.dataset.run);
+  $("#stage").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}));
+
+/* =================== SOURCES / DEPURADOR =================== */
+const CODE_BUG = `/*
+ * get-started.js
+ * Versão simulada da demo oficial do Chrome:
+ * googlechrome.github.io/devtools-samples/debug-js/get-started
+ *
+ * O que deveria acontecer: 5 + 1 = 6
+ * O que acontece:          5 + 1 = 51
+ *
+ * Missão: encontrar o bug usando o DevTools.
+ */
+
+function onClick() {
+  if (inputsAreEmpty()) {
+    label.textContent = "Erro: um ou os dois campos estão vazios.";
+    return;
+  }
+  updateLabel();
+}
+
+function inputsAreEmpty() {
+  if (getNumber1() === "" || getNumber2() === "") {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function updateLabel() {
+  var addend1 = getNumber1();
+  var addend2 = getNumber2();
+  var sum = addend1 + addend2;
+  label.textContent = addend1 + " + " + addend2 + " = " + sum;
+}
+
+function getNumber1() {
+  return inputs[0].value;
+}
+
+function getNumber2() {
+  return inputs[1].value;
+}
+
+var inputs = document.querySelectorAll("input");
+var label = document.querySelector("p");
+var button = document.querySelector("button");
+button.addEventListener("click", onClick);`.split("\n");
+const FIX_LINE = "  var sum = parseInt(addend1) + parseInt(addend2);";
+const BUG_LINE = CODE_BUG[30];
+const FILES = {
+  "get-started.js": null,
+  "get-started.html": `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <title>Demo: debug de JavaScript</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <h1>Demo: Primeiros passos no debug de JavaScript</h1>
+    <label for="num1">Número 1</label>
+    <input id="num1" value="5">
+    <label for="num2">Número 2</label>
+    <input id="num2" value="1">
+    <button>Somar Número 1 e Número 2</button>
+    <p></p>
+    <script src="get-started.js"><\/script>
+  </body>
+</html>`.split("\n"),
+  "style.css": `body { font-family: Georgia, serif; padding: 18px 20px; }
+
+h1 { font-size: 20px; color: #1f2a5a; margin: 0 0 10px; }
+
+label { display: block; font-size: 13px; margin-top: 8px; }
+
+input { padding: 6px 8px; border: 1px solid #9aa3b5; border-radius: 4px; width: 120px; }
+
+button { margin-top: 14px; padding: 8px 12px; background: #1a6fe0;
+         color: #ffffff; border: none; border-radius: 4px; cursor: pointer; }
+
+p { font-size: 18px; font-weight: 700; color: #b3261e; min-height: 26px; margin: 12px 0 0; }`.split("\n"),
+  "maior.js (snippet)": `// Exercício 2 — cole no seu Snippet e rode com Ctrl+Enter
+function maior(lista) {
+  let maior = 0;
+  for (const n of lista) {
+    if (n < maior) maior = n;
+  }
+  return maior;
+}
+console.log(maior([3, 9, 4]));    // esperado 9
+console.log(maior([-5, -2, -8])); // esperado -2`.split("\n")
+};
+const FN_RANGES = { onClick: [12, 18], inputsAreEmpty: [20, 26], updateLabel: [28, 33], getNumber1: [35, 37], getNumber2: [39, 41] };
+const KW = /^(const|let|var|function|return|for|of|in|if|else|async|await|new|throw|try|catch|typeof|true|false|null|undefined|class|this)$/;
+function hl(src) {
+  if (/^\s*(\/\*|\*)/.test(src)) return `<span class="t-com">${esc(src)}</span>`;
+  const re = /(\/\/.*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(src))) {
+    out += esc(src.slice(last, m.index));
+    if (m[1]) out += `<span class="t-com">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="t-str">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="t-num">${m[3]}</span>`;
+    else { const w = m[4]; out += KW.test(w) ? `<span class="t-kw">${w}</span>` : src[re.lastIndex] === "(" ? `<span class="t-fn">${w}</span>` : w; }
+    last = re.lastIndex;
+  }
+  return out + esc(src.slice(last));
+}
+function hlHtml(src) { return esc(src).replace(/(&lt;\/?)([\w!]+)/g, '$1<span class="tg">$2</span>').replace(/([\w-]+)=(&quot;[^&]*&quot;)/g, '<span class="at">$1</span>=<span class="av">$2</span>'); }
+
+let curFile = "get-started.js", fixed = false, bps = new Set(), bpOff = new Set(), deact = false;
+let trace = null, pos = -1, frameView = null, prevLocal = null;
+function codeLines() { const c = CODE_BUG.slice(); if (fixed) c[30] = FIX_LINE; return c; }
+
+function fileTree(snip) {
+  const items = snip
+    ? [["maior.js (snippet)", 0, "≡"], ["+ New snippet", 0, ""]]
+    : [["top", 0, "▾"], ["googlechrome.github.io", 1, "☁"], ["devtools-samples/debug-js", 2, "▾"], ["get-started.html", 3, "◇"], ["get-started.js", 3, "{ }"], ["style.css", 3, "#"]];
+  $("#fileTree").innerHTML = items.map(([n, d, ic]) => `<li style="--d:${d}" data-f="${esc(n)}" class="${n === curFile ? "sel" : ""}"><span class="fi">${ic}</span>${esc(n)}</li>`).join("");
+}
+$("#fileTree").addEventListener("click", e => {
+  const li = e.target.closest("li"); if (!li) return; const f = li.dataset.f;
+  if (f in FILES) { curFile = f; fileTree($("#navSnip").getAttribute("aria-selected") === "true"); renderCode(); if (f.includes("snippet")) explain("snippets"); }
+});
+$("#navPage").addEventListener("click", () => { $("#navPage").setAttribute("aria-selected", "true"); $("#navSnip").setAttribute("aria-selected", "false"); fileTree(false); });
+$("#navSnip").addEventListener("click", () => { $("#navSnip").setAttribute("aria-selected", "true"); $("#navPage").setAttribute("aria-selected", "false"); fileTree(true); });
+
+function curEvent() { return trace && pos >= 0 ? trace.ev[pos] : null; }
+function vdisp(v) {
+  if (v && v.__d) return { t: v.__d, c: "" };
+  if (typeof v === "string") return { t: `"${v}"`, c: "str" };
+  if (v === undefined) return { t: "undefined", c: "und" };
+  return { t: String(v), c: "num" };
+}
+function renderCode() {
+  const isJs = curFile === "get-started.js";
+  const lines = isJs ? codeLines() : FILES[curFile];
+  $("#edTab").textContent = curFile; $("#fixBtn").hidden = !isJs;
+  $("#fixBtn").textContent = fixed ? "Desfazer correção" : "Corrigir linha 31";
+  const ev = isJs ? curEvent() : null;
+  let inline = {};
+  if (ev) {
+    const top = ev.stack[0]; const [a, b] = FN_RANGES[top.fn];
+    for (let n = a + 1; n < ev.line && n <= b; n++) {
+      const txt = lines[n - 1]; const parts = [];
+      Object.entries(ev.local).forEach(([k, v]) => { if (k !== "this" && v !== undefined && new RegExp("\\b" + k + "\\b").test(txt)) { const d = vdisp(v); parts.push(`${k} = ${d.t}`); } });
+      if (parts.length) inline[n] = parts.join(", ");
+    }
+  }
+  $("#code").innerHTML = lines.map((l, i) => {
+    const n = i + 1; const cls = ["cl"];
+    if (isJs && bps.has(n)) { cls.push("bp"); if (deact || bpOff.has(n)) cls.push("bp-off"); }
+    if (ev && ev.line === n) cls.push("exec");
+    if (isJs && frameView && frameView === n && (!ev || ev.line !== n)) cls.push("frame");
+    const body = curFile.endsWith(".html") ? hlHtml(l) : curFile.endsWith(".css") ? esc(l) : hl(l);
+    return `<div class="${cls.join(" ")}" data-n="${n}"><span class="g" data-ex="gutter">${n}</span><span class="c">${body || " "}${inline[n] ? `<span class="iv">${esc(inline[n])}</span>` : ""}</span></div>`;
+  }).join("");
+}
+function flashLine(n) { const row = $(`#code .cl[data-n="${n}"]`); if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("hot"); } }
+$("#code").addEventListener("click", e => {
+  const g = e.target.closest(".g"); if (!g || curFile !== "get-started.js") return;
+  const n = +g.textContent; const txt = codeLines()[n - 1].trim();
+  if (!txt || /^(\/\*|\*|\/\/)/.test(txt) || txt === "}" || txt === "} else {") { toast("Esta linha não tem código executável."); return; }
+  bps.has(n) ? (bps.delete(n), bpOff.delete(n)) : bps.add(n);
+  renderCode(); renderBpList();
+});
+function renderBpList() {
+  const l = codeLines();
+  $("#bpList").innerHTML = bps.size ? [...bps].sort((a, b) => a - b).map(n => `<label class="kv" style="justify-content:space-between"><span><input type="checkbox" data-bp="${n}" ${bpOff.has(n) ? "" : "checked"}> get-started.js:${n}</span><button class="xbtn" data-rm="${n}" aria-label="Remover breakpoint">×</button></label><div class="muted" style="padding-left:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l[n - 1].trim())}</div>`).join("") : `<span class="muted" style="font-family:var(--font-body)">Nenhum. Clique no número de uma linha.</span>`;
+}
+$("#bpList").addEventListener("change", e => { const n = +e.target.dataset.bp; if (!n) return; e.target.checked ? bpOff.delete(n) : bpOff.add(n); renderCode(); });
+$("#bpList").addEventListener("click", e => { const n = +e.target.dataset.rm; if (n) { bps.delete(n); bpOff.delete(n); renderCode(); renderBpList(); } });
+
+// ---- traço de execução (o que o motor JS faria, passo a passo) ----
+function buildTrace(a, b) {
+  const ev = []; const btn = { __d: "button" }, win = { __d: "Window" };
+  const push = (line, stack, local) => ev.push({ line, depth: stack.length, stack, local });
+  const oc = l => ({ fn: "onClick", line: l });
+  const ie = l => ({ fn: "inputsAreEmpty", line: l });
+  const ul = l => ({ fn: "updateLabel", line: l });
+  push(13, [oc(13)], { this: btn });
+  push(21, [ie(21), oc(13)], { this: win });
+  push(36, [{ fn: "getNumber1", line: 36 }, ie(21), oc(13)], { this: win });
+  if (a !== "") { push(21, [ie(21), oc(13)], { this: win }); push(40, [{ fn: "getNumber2", line: 40 }, ie(21), oc(13)], { this: win }); }
+  if (a === "" || b === "") {
+    push(22, [ie(22), oc(13)], { this: win });
+    push(14, [oc(14)], { this: btn }); push(15, [oc(15)], { this: btn });
+    return { ev, result: "Erro: um ou os dois campos estão vazios." };
+  }
+  push(24, [ie(24), oc(13)], { this: win });
+  push(17, [oc(17)], { this: btn });
+  const L = (a1, a2, s) => ({ this: win, addend1: a1, addend2: a2, sum: s });
+  push(29, [ul(29), oc(17)], L(undefined, undefined, undefined));
+  push(36, [{ fn: "getNumber1", line: 36 }, ul(29), oc(17)], { this: win });
+  push(30, [ul(30), oc(17)], L(a, undefined, undefined));
+  push(40, [{ fn: "getNumber2", line: 40 }, ul(30), oc(17)], { this: win });
+  push(31, [ul(31), oc(17)], L(a, b, undefined));
+  const sum = fixed ? parseInt(a) + parseInt(b) : a + b;
+  push(32, [ul(32), oc(17)], L(a, b, sum));
+  push(18, [oc(18)], { this: btn });
+  return { ev, result: a + " + " + b + " = " + sum };
+}
+const isBp = line => !deact && bps.has(line) && !bpOff.has(line);
+function setPaused(on) {
+  ["#bResume", "#bOver", "#bInto", "#bOut"].forEach(s => $(s).disabled = !on);
+  const vp = $("#viewport"); vp.querySelectorAll(".paused-banner,.frozen").forEach(x => x.remove());
+  if (on) {
+    const fr = document.createElement("div"); fr.className = "frozen"; $("#m-body").appendChild(fr);
+    const ban = document.createElement("div"); ban.className = "paused-banner"; ban.setAttribute("data-ex", "paused");
+    ban.innerHTML = `Pausado no depurador <button data-act="resume" title="Resume (F8)">▶</button><button data-act="over" title="Step over (F10)">⤼</button>`;
+    $("#m-body").appendChild(ban);
+    ban.addEventListener("click", e => { const b = e.target.closest("button"); if (b) b.dataset.act === "resume" ? resume() : stepOver(); });
+  }
+}
+function pauseAt(i, reason) {
+  pos = i; frameView = null; curFile = "get-started.js"; fileTree(false);
+  showTab("sources", true); renderCode(); renderSidebar(); setPaused(true);
+  $("#dbgStatus").className = "status paused";
+  $("#dbgStatus").textContent = reason || "Pausado no breakpoint";
+  flashLine(trace.ev[i].line);
+  if (reason && reason.includes("evento")) explain("event-bp"); else explain("paused");
+}
+function finish() {
+  $("#m-p").textContent = trace.result; renderDom();
+  pos = -1; trace = null; prevLocal = null; frameView = null; setPaused(false);
+  $("#dbgStatus").className = "status"; $("#dbgStatus").textContent = "Não pausado · execução terminou";
+  renderCode(); renderSidebar();
+  $("#m-p").animate?.([{ background: "#fff3b0" }, { background: "transparent" }], { duration: 900 });
+}
+function go(j) { if (j < 0 || j >= trace.ev.length) finish(); else { pos = j; frameView = null; renderCode(); renderSidebar(); $("#dbgStatus").textContent = "Pausado · " + trace.ev[j].stack[0].fn + "()"; flashLine(trace.ev[j].line); } }
+function nextWhere(pred) { for (let k = pos + 1; k < trace.ev.length; k++) if (pred(trace.ev[k])) return k; return -1; }
+function resume() { if (!trace) return; prevLocal = trace.ev[pos].local; const j = nextWhere(e => isBp(e.line)); go(j); }
+function stepOver() { if (!trace) return; const d = trace.ev[pos].depth; prevLocal = trace.ev[pos].local; go(nextWhere(e => e.depth <= d || isBp(e.line))); }
+function stepInto() { if (!trace) return; prevLocal = trace.ev[pos].local; go(pos + 1 < trace.ev.length ? pos + 1 : -1); }
+function stepOut() { if (!trace) return; const d = trace.ev[pos].depth; prevLocal = trace.ev[pos].local; go(nextWhere(e => e.depth < d || isBp(e.line))); }
+$("#bResume").addEventListener("click", resume); $("#bOver").addEventListener("click", stepOver);
+$("#bInto").addEventListener("click", stepInto); $("#bOut").addEventListener("click", stepOut);
+$("#bDeact").addEventListener("click", () => { deact = !deact; $("#bDeact").setAttribute("aria-pressed", deact); renderCode(); });
+document.addEventListener("keydown", e => {
+  if (!trace) return;
+  if (e.key === "F8") { e.preventDefault(); resume(); }
+  else if (e.key === "F10") { e.preventDefault(); stepOver(); }
+  else if (e.key === "F11" && e.shiftKey) { e.preventDefault(); stepOut(); }
+  else if (e.key === "F11") { e.preventDefault(); stepInto(); }
+});
+
+let watches = ["typeof sum"];
+function evalWatch(expr, local) {
+  const names = Object.keys(local).filter(k => k !== "this" && /^[A-Za-z_$][\w$]*$/.test(k));
+  const vals = names.map(k => local[k] && local[k].__d ? {} : local[k]);
+  try { return { ok: true, v: Function(...names, `"use strict"; return (${expr});`)(...vals) }; }
+  catch (e) {
+    const m = /^typeof\s+([A-Za-z_$][\w$]*)$/.exec(expr.trim());
+    if (m) return { ok: true, v: m[1] in local ? (local[m[1]] && local[m[1]].__d ? "object" : typeof local[m[1]]) : "undefined" };
+    const m2 = /^([A-Za-z_$][\w$]*)$/.exec(expr.trim());
+    if (m2 && m2[1] in local) return { ok: true, v: local[m2[1]] };
+    if (e instanceof ReferenceError || e instanceof TypeError || e instanceof SyntaxError) return { ok: false, v: e.name };
+    return { ok: false, v: "não disponível" };
+  }
+}
+function renderSidebar() {
+  const ev = curEvent();
+  $("#watchList").innerHTML = watches.map((w, i) => {
+    let val = `<span class="muted">&lt;não pausado&gt;</span>`;
+    if (ev) { const r = evalWatch(w, ev.local); val = r.ok ? (r.v && r.v.__d ? r.v.__d : `<span class="${typeof r.v === "string" ? "v-str" : "v-num"}">${esc(vdisp(r.v).t)}</span>`) : `<span class="muted">&lt;${esc(r.v)}&gt;</span>`; }
+    return `<div class="kv" style="justify-content:space-between"><span><span class="k">${esc(w)}</span>: ${val}</span><button class="xbtn" data-w="${i}" aria-label="Remover">×</button></div>`;
+  }).join("") || `<span class="muted">Nenhuma expressão.</span>`;
+  if (!ev) { $("#scope").innerHTML = `<span class="muted">Não pausado</span>`; $("#stack").innerHTML = `<span class="muted">Não pausado</span>`; return; }
+  const sameFn = prevLocal && trace && pos > 0;
+  const locRows = Object.entries(ev.local).map(([k, v]) => {
+    const d = vdisp(v); const changed = sameFn && k in prevLocal && prevLocal[k] !== v && k !== "this";
+    return `<div class="kv${changed ? " changed" : ""}"><span class="k">${k}</span>: <span class="${d.c === "str" ? "v-str" : d.c === "num" ? "v-num" : "v-und"}">${esc(d.t)}</span></div>`;
+  }).join("");
+  $("#scope").innerHTML = `<div style="font-family:var(--font-body);font-weight:600">▾ Local</div><div style="padding-left:12px">${locRows}</div>
+    <div style="font-family:var(--font-body);font-weight:600;margin-top:4px">▾ Global <span class="muted" style="font-weight:400">Window</span></div>
+    <div style="padding-left:12px"><div class="kv"><span class="k">button</span>: button</div><div class="kv"><span class="k">inputs</span>: NodeList(2)</div><div class="kv"><span class="k">label</span>: p</div><div class="kv muted">… e mais centenas do window</div></div>`;
+  $("#stack").innerHTML = ev.stack.map((f, i) => `<div class="frame-row${i === 0 ? " top" : ""}" data-line="${f.line}"><span>${i === 0 ? "➜ " : ""}${f.fn}</span><span class="muted">get-started.js:${f.line}</span></div>`).join("");
+}
+$("#stack").addEventListener("click", e => { const r = e.target.closest(".frame-row"); if (!r) return; frameView = +r.dataset.line; renderCode(); flashLine(frameView); });
+$("#watchList").addEventListener("click", e => { const i = e.target.dataset.w; if (i !== undefined) { watches.splice(+i, 1); renderSidebar(); } });
+$("#watchForm").addEventListener("submit", e => { e.preventDefault(); const v = $("#watchIn").value.trim(); if (v) { watches.push(v); $("#watchIn").value = ""; renderSidebar(); } });
+
+$("#fixBtn").addEventListener("click", () => {
+  fixed = !fixed;
+  if (trace) { const a = $("#m-in1").value, b = $("#m-in2").value; trace = buildTrace(a, b); pos = Math.min(pos, trace.ev.length - 1); renderSidebar(); }
+  renderCode(); renderBpList();
+  if (fixed) { toast("Ctrl+S: alteração salva. Agora desative os breakpoints e retome (F8)."); explain("fix"); }
+  else toast("Correção desfeita: o bug voltou.");
+});
+
+// clique no botão da página = o evento "click" dispara o onClick
+$("#m-btn").addEventListener("click", () => {
+  if (inspecting || trace) return;
+  trace = buildTrace($("#m-in1").value, $("#m-in2").value); pos = -1; prevLocal = null;
+  if (!deact && $("#evClick").checked) { pauseAt(0, "Pausado no evento: click"); return; }
+  const j = trace.ev.findIndex(e => isBp(e.line));
+  j >= 0 ? pauseAt(j, "Pausado no breakpoint · linha " + trace.ev[j].line) : finish();
+});
+
+/* =================== NETWORK =================== */
+const NET = [
+  { n: "get-started.html", s: 200, st: "OK", t: "document", f: "doc", size: "1.2 kB", time: 84, start: 0, ttfb: 62, url: "https://googlechrome.github.io/devtools-samples/debug-js/get-started" },
+  { n: "style.css", s: 200, st: "OK", t: "stylesheet", f: "css", size: "0.6 kB", time: 31, start: 90, ttfb: 22, url: "https://googlechrome.github.io/devtools-samples/debug-js/style.css" },
+  { n: "get-started.js", s: 200, st: "OK", t: "script", f: "js", size: "1.0 kB", time: 36, start: 92, ttfb: 25, url: "https://googlechrome.github.io/devtools-samples/debug-js/get-started.js" },
+  { n: "favicon.ico", s: 404, st: "Not Found", t: "x-icon", f: "img", size: "9.4 kB", time: 48, start: 160, ttfb: 40, url: "https://googlechrome.github.io/favicon.ico" }
+];
+let netF = "all", netSel = -1;
+function renderNet() {
+  const max = 220;
+  $("#netTable tbody").innerHTML = NET.map((r, i) => (netF === "all" || r.f === netF) ? `<tr class="${r.s >= 400 ? "fail" : ""}${i === netSel ? " sel" : ""}" data-i="${i}" data-ex="net-row"><td>${r.n}</td><td>${r.s}</td><td>${r.t}</td><td>${r.size}</td><td>${r.time} ms</td><td><div class="wf"><i class="w" style="left:${r.start / max * 100}%;width:${r.ttfb / max * 100}%"></i><i style="left:${(r.start + r.ttfb) / max * 100}%;width:${Math.max(2, (r.time - r.ttfb) / max * 100)}%"></i></div></td></tr>` : "").join("") || `<tr><td colspan="6" class="muted">Nenhuma requisição deste tipo. Na Aula 16, os fetch aparecem em Fetch/XHR.</td></tr>`;
+}
+$("#netFilters").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return; netF = c.dataset.f; $$(".chip", $("#netFilters")).forEach(x => x.setAttribute("aria-pressed", String(x === c))); renderNet(); });
+$("#netTable").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-i]"); if (!tr) return; netSel = +tr.dataset.i; renderNet(); const r = NET[netSel];
+  $("#netDet").innerHTML = `<b>${r.n}</b><dl><dt>URL</dt><dd>${r.url}</dd><dt>Método</dt><dd>GET</dd><dt>Status</dt><dd style="color:${r.s >= 400 ? "var(--err)" : "var(--ok)"}">${r.s} ${r.st}</dd><dt>Tipo</dt><dd>${r.t}</dd><dt>Tempo</dt><dd>${r.time} ms (espera ${r.ttfb} ms)</dd></dl><p class="muted" style="margin:10px 0 0">Verde no waterfall = esperando o servidor. Azul = baixando o conteúdo.</p>`;
+});
+
+/* =================== APPLICATION =================== */
+const STORE = {
+  local: { title: "Local storage · googlechrome.github.io", rows: [["usuarios", '[{"name":"Lisiane","email":"lisiane@email.com"}]'], ["tema", "claro"]] },
+  session: { title: "Session storage · googlechrome.github.io", rows: [["aba_aberta", "debug-js"]] },
+  idb: { title: "IndexedDB", rows: [] },
+  cookies: { title: "Cookies · googlechrome.github.io", rows: [["_ga", "GA1.1.48210.1730643"], ["sessao", "a9f3c2e1"]], cookie: true }
+};
+let appSel = "local";
+function renderApp() {
+  const s = STORE[appSel];
+  const head = s.cookie ? "<th>Name</th><th>Value</th><th>HttpOnly</th><th>Secure</th>" : "<th>Key</th><th>Value</th><th></th>";
+  $("#appMain").innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><b>${s.title}</b>${s.rows.length && !s.cookie ? `<button class="btn" id="appClear">Limpar tudo</button>` : ""}</div>` +
+    (s.rows.length ? `<div class="tbl-wrap"><table class="grid"><thead><tr>${head}</tr></thead><tbody>${s.rows.map((r, i) => `<tr><td class="mono">${esc(r[0])}</td><td class="mono" style="white-space:normal;word-break:break-all">${esc(r[1])}</td>${s.cookie ? `<td>${i === 1 ? "✓" : ""}</td><td>✓</td>` : `<td><button class="xbtn" data-del="${i}" aria-label="Apagar">×</button></td>`}</tr>`).join("")}</tbody></table></div>` : `<span class="muted">Nada guardado aqui.</span>`) +
+    (appSel === "local" ? `<div class="tip" style="font-family:var(--font-body)"><b>Ponte para a Aula 16:</b> a chave <code>usuarios</code> é a que criamos com <code>localStorage.setItem("usuarios", JSON.stringify(usuarios))</code>. O valor é sempre <b>texto</b>.</div>` : "");
+  $("#appMain").querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { s.rows.splice(+b.dataset.del, 1); renderApp(); }));
+  const c = $("#appClear"); if (c) c.addEventListener("click", () => { s.rows = []; renderApp(); });
+}
+$("#appTree").addEventListener("click", e => { const li = e.target.closest("li"); if (!li) return; appSel = li.dataset.s; $$("#appTree li").forEach(x => x.classList.toggle("sel", x === li)); renderApp(); });
+
+/* =================== PERFORMANCE / MEMORY / LIGHTHOUSE =================== */
+let rec = false;
+function drawFlame() {
+  const bars = [[0, 0, 100, "#f3c94b", "Event: click"], [1, 2, 60, "#f3c94b", "onClick"], [2, 4, 12, "#f3c94b", "inputsAreEmpty"], [2, 20, 40, "#f3c94b", "updateLabel"], [3, 22, 8, "#f3c94b", "getNumber1"], [3, 34, 8, "#f3c94b", "getNumber2"], [1, 64, 18, "#a68cf0", "Recalculate Style"], [1, 84, 9, "#a68cf0", "Layout"], [1, 94, 5, "#6fcf8a", "Paint"]];
+  $("#flame").innerHTML = bars.map(([r, l, w, c, t]) => `<i style="top:${8 + r * 22}px;left:${l * .9 + 2}%;width:${w * .9}%;background:${c}" title="${t}">${t}</i>`).join("");
+}
+$("#perfRec").addEventListener("click", () => {
+  rec = !rec; $("#perfRec").textContent = rec ? "■ Parar" : "● Gravar";
+  $("#perfMsg").textContent = rec ? "Gravando… clique no botão da página e depois em Parar." : "Gravação de 1,2 s · o clique levou 4,1 ms de JavaScript.";
+  if (!rec) drawFlame(); else $("#flame").innerHTML = "";
+  explain("perf-record");
+});
+$("#memSnap").addEventListener("click", () => {
+  $("#memOut").innerHTML = `<b>Snapshot 1</b> · 2,3 MB<div class="tbl-wrap" style="margin-top:6px"><table class="grid"><thead><tr><th>Constructor</th><th>Count</th><th>Shallow size</th><th>Retained size</th></tr></thead><tbody>
+  <tr><td>(compiled code)</td><td>1 204</td><td>612 kB</td><td>612 kB</td></tr><tr><td>(string)</td><td>8 431</td><td>389 kB</td><td>389 kB</td></tr><tr><td>HTMLInputElement</td><td>2</td><td>0.3 kB</td><td>1.1 kB</td></tr><tr><td>Window</td><td>1</td><td>0.1 kB</td><td>1 840 kB</td></tr></tbody></table></div><p class="muted" style="margin:8px 0 0">Shallow = o tamanho do próprio objeto. Retained = quanto seria liberado se ele sumisse.</p>`;
+  explain("tab-memory");
+});
+$("#lhRun").addEventListener("click", () => {
+  const S = [["Performance", 98, "#18a058"], ["Acessibilidade", 84, "#d29a00"], ["Boas práticas", 100, "#18a058"], ["SEO", 82, "#d29a00"]];
+  $("#lhScores").innerHTML = S.map(([n, v, c]) => `<div class="score"><div class="ring" style="--v:${v};--c:${c}"><b>${v}</b></div>${n}</div>`).join("");
+  $("#lhIssues").innerHTML = `<b>Oportunidades</b><ul style="margin:6px 0 0;padding-left:18px"><li>Acessibilidade: os campos não estão ligados aos rótulos (o <code>for="num1"</code> aponta para um <code>id</code> que não existe no input).</li><li>SEO: o documento não tem <code>&lt;meta name="description"&gt;</code>.</li><li>Acessibilidade: contraste baixo no texto dos rótulos.</li></ul>`;
+});
+
+/* =================== TOUR GUIADO =================== */
+const TOUR = [
+  { tab: null, ex: "start", sel: "#stage" },
+  { tab: null, ex: "mockpage", sel: "#m-btn" },
+  { tab: "elements", ex: "tab-elements", sel: '.dt-tab[data-tab="elements"]' },
+  { tab: "elements", ex: "inspect", sel: "#inspectBtn" },
+  { tab: "elements", ex: "styles", sel: "#styles" },
+  { tab: "elements", ex: "boxmodel", sel: "#boxm" },
+  { tab: "console", ex: "tab-console", sel: '.dt-tab[data-tab="console"]' },
+  { tab: "console", ex: "console-methods", sel: "#conExamples" },
+  { tab: "console", ex: "console-input", sel: "#conIn" },
+  { tab: "sources", ex: "tab-sources", sel: '.dt-tab[data-tab="sources"]' },
+  { tab: "sources", ex: "file-tree", sel: "#fileTree" },
+  { tab: "sources", ex: "event-bp", sel: "#mouseCat", open: true },
+  { tab: "sources", ex: "gutter", sel: '#code .cl[data-n="31"] .g' },
+  { tab: "sources", ex: "btn-over", sel: "#bOver" },
+  { tab: "sources", ex: "scope", sel: "#scope" },
+  { tab: "sources", ex: "watch", sel: "#watchList" },
+  { tab: "sources", ex: "callstack", sel: "#stack" },
+  { tab: "sources", ex: "fix", sel: "#fixBtn" },
+  { tab: "network", ex: "tab-network", sel: '.dt-tab[data-tab="network"]' },
+  { tab: "application", ex: "tab-application", sel: '.dt-tab[data-tab="application"]' },
+  { tab: "performance", ex: "tab-performance", sel: '.dt-tab[data-tab="performance"]' },
+  { tab: "memory", ex: "tab-memory", sel: '.dt-tab[data-tab="memory"]' },
+  { tab: "lighthouse", ex: "tab-lighthouse", sel: '.dt-tab[data-tab="lighthouse"]' }
+];
+let tp = -1;
+function tourGo(i) {
+  tp = Math.max(0, Math.min(TOUR.length - 1, i)); const s = TOUR[tp];
+  if (s.tab) showTab(s.tab, true);
+  if (s.open) { const d = $(s.sel); d.open = true; }
+  const el = $(s.sel); explain(s.ex, el);
+  if (el && s.sel.includes(".cl")) el.scrollIntoView({ block: "center" });
+  $("#tourPos").textContent = `Passo ${tp + 1} de ${TOUR.length}`;
+  $("#tourNext").textContent = tp === TOUR.length - 1 ? "Fim ✓" : "Próximo →";
+}
+$("#tourNext").addEventListener("click", () => tourGo(tp + 1));
+$("#tourPrev").addEventListener("click", () => tourGo(tp - 1));
+
+/* =================== LENDO O ERRO =================== */
+function setPart(p) { $$("#errline span, #parts .part").forEach(x => x.classList.toggle("on", x.dataset.p === p)); }
+$$("#errline span, #parts .part").forEach(x => { x.addEventListener("click", () => setPart(x.dataset.p)); x.addEventListener("mouseenter", () => setPart(x.dataset.p)); });
+
+/* =================== INÍCIO =================== */
+fileTree(false); renderCode(); renderBpList(); renderSidebar(); renderDom(); renderStyles(); renderNet(); renderApp();
+explain("start");
+</script>
+</body>
+</html>
